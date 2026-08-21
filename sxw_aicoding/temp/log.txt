@@ -1,0 +1,219 @@
+shixiangweii@shixiangweiideMacBook-Pro sxw_tcpdump_analyze % npm install
+⠦^C
+shixiangweii@shixiangweiideMacBook-Pro sxw_tcpdump_analyze %
+shixiangweii@shixiangweiideMacBook-Pro sxw_tcpdump_analyze % npm install --verbose
+npm verbose cli /usr/local/bin/node /usr/local/bin/npm
+npm info using npm@10.9.8
+npm info using node@v22.22.3
+npm verbose title npm install
+npm verbose argv "install" "--loglevel" "verbose"
+npm verbose logfile logs-max:10 dir:/Users/shixiangweii/.npm/_logs/2026-08-21T12_03_20_053Z-
+npm verbose logfile /Users/shixiangweii/.npm/_logs/2026-08-21T12_03_20_053Z-debug-0.log
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@rolldown/binding-win32-x64-msvc
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@rolldown/binding-win32-arm64-msvc
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@rolldown/binding-openharmony-arm64
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@rolldown/binding-linux-x64-musl
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@rolldown/binding-linux-x64-gnu
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@rolldown/binding-linux-s390x-gnu
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@rolldown/binding-linux-ppc64-gnu
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@rolldown/binding-linux-arm64-musl
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@rolldown/binding-linux-arm64-gnu
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@rolldown/binding-linux-arm-gnueabihf
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@rolldown/binding-freebsd-x64
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@rolldown/binding-darwin-arm64
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@rolldown/binding-android-arm64
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@esbuild/win32-x64
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@esbuild/win32-ia32
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@esbuild/win32-arm64
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@esbuild/sunos-x64
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@esbuild/openharmony-arm64
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@esbuild/openbsd-x64
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@esbuild/openbsd-arm64
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@esbuild/netbsd-x64
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@esbuild/netbsd-arm64
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@esbuild/linux-x64
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@esbuild/linux-s390x
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@esbuild/linux-riscv64
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@esbuild/linux-ppc64
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@esbuild/linux-mips64el
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@esbuild/linux-loong64
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@esbuild/linux-ia32
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@esbuild/linux-arm64
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@esbuild/linux-arm
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@esbuild/freebsd-x64
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@esbuild/freebsd-arm64
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@esbuild/darwin-arm64
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@esbuild/android-x64
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@esbuild/android-arm64
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@esbuild/android-arm
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/@esbuild/aix-ppc64
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/lightningcss-win32-x64-msvc
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/lightningcss-win32-arm64-msvc
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/lightningcss-linux-x64-musl
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/lightningcss-linux-x64-gnu
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/lightningcss-linux-arm64-musl
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/lightningcss-linux-arm64-gnu
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/lightningcss-linux-arm-gnueabihf
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/lightningcss-freebsd-x64
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/lightningcss-darwin-arm64
+npm verbose reify failed optional dependency /Users/shixiangweii/WebstormProjects/sxw_tcpdump_analyze/node_modules/lightningcss-android-arm64
+npm http cache typescript@https://registry.anpm.alibaba-inc.com/typescript/-/typescript-6.0.3.tgz 1ms (cache hit)
+npm http cache semver@https://registry.anpm.alibaba-inc.com/semver/-/semver-7.8.5.tgz 0ms (cache hit)
+npm http cache @vitest/utils@https://registry.anpm.alibaba-inc.com/@vitest/utils/-/utils-4.1.11.tgz 0ms (cache hit)
+npm http cache @vitest/spy@https://registry.anpm.alibaba-inc.com/@vitest/spy/-/spy-4.1.11.tgz 0ms (cache hit)
+npm http cache @vitest/expect@https://registry.anpm.alibaba-inc.com/@vitest/expect/-/expect-4.1.11.tgz 0ms (cache hit)
+npm http cache nanoid@https://registry.anpm.alibaba-inc.com/nanoid/-/nanoid-3.3.18.tgz 0ms (cache hit)
+npm http cache @vitest/snapshot@https://registry.anpm.alibaba-inc.com/@vitest/snapshot/-/snapshot-4.1.11.tgz 0ms (cache hit)
+npm http cache @vitest/mocker@https://registry.anpm.alibaba-inc.com/@vitest/mocker/-/mocker-4.1.11.tgz 0ms (cache hit)
+npm http cache @vitest/runner@https://registry.anpm.alibaba-inc.com/@vitest/runner/-/runner-4.1.11.tgz 0ms (cache hit)
+npm http cache @types/react-dom@https://registry.anpm.alibaba-inc.com/@types/react-dom/-/react-dom-19.2.4.tgz 0ms (cache hit)
+npm http cache @vitejs/plugin-react@https://registry.anpm.alibaba-inc.com/@vitejs/plugin-react/-/plugin-react-6.1.0.tgz 0ms (cache hit)
+npm http cache @vitest/pretty-format@https://registry.anpm.alibaba-inc.com/@vitest/pretty-format/-/pretty-format-4.1.11.tgz 0ms (cache hit)
+npm http cache @types/node@https://registry.anpm.alibaba-inc.com/@types/node/-/node-26.2.0.tgz 0ms (cache hit)
+npm http cache @types/deep-eql@https://registry.anpm.alibaba-inc.com/@types/deep-eql/-/deep-eql-4.0.2.tgz 0ms (cache hit)
+npm http cache @standard-schema/spec@https://registry.anpm.alibaba-inc.com/@standard-schema/spec/-/spec-1.1.0.tgz 0ms (cache hit)
+npm http cache @types/chai@https://registry.anpm.alibaba-inc.com/@types/chai/-/chai-5.2.3.tgz 0ms (cache hit)
+npm http cache @rolldown/binding-darwin-x64@https://registry.anpm.alibaba-inc.com/@rolldown/binding-darwin-x64/-/binding-darwin-x64-1.2.5.tgz 0ms (cache hit)
+npm http cache @oxc-project/types@https://registry.anpm.alibaba-inc.com/@oxc-project/types/-/types-0.146.0.tgz 0ms (cache hit)
+npm http cache @fastify/proxy-addr@https://registry.anpm.alibaba-inc.com/@fastify/proxy-addr/-/proxy-addr-5.1.0.tgz 0ms (cache hit)
+npm http cache @pinojs/redact@https://registry.anpm.alibaba-inc.com/@pinojs/redact/-/redact-0.4.0.tgz 0ms (cache hit)
+npm http cache @fastify/multipart@https://registry.anpm.alibaba-inc.com/@fastify/multipart/-/multipart-10.1.1.tgz 0ms (cache hit)
+npm http cache @fastify/merge-json-schemas@https://registry.anpm.alibaba-inc.com/@fastify/merge-json-schemas/-/merge-json-schemas-0.2.1.tgz 0ms (cache hit)
+npm http cache @fastify/forwarded@https://registry.anpm.alibaba-inc.com/@fastify/forwarded/-/forwarded-3.0.2.tgz 0ms (cache hit)
+npm http cache @fastify/fast-json-stringify-compiler@https://registry.anpm.alibaba-inc.com/@fastify/fast-json-stringify-compiler/-/fast-json-stringify-compiler-5.1.0.tgz 0ms (cache hit)
+npm http cache @fastify/error@https://registry.anpm.alibaba-inc.com/@fastify/error/-/error-4.2.0.tgz 0ms (cache hit)
+npm http cache @types/react@https://registry.anpm.alibaba-inc.com/@types/react/-/react-19.2.18.tgz 0ms (cache hit)
+npm http cache @fastify/deepmerge@https://registry.anpm.alibaba-inc.com/@fastify/deepmerge/-/deepmerge-3.2.1.tgz 0ms (cache hit)
+npm http cache @fastify/cors@https://registry.anpm.alibaba-inc.com/@fastify/cors/-/cors-11.3.0.tgz 0ms (cache hit)
+npm http cache @fastify/busboy@https://registry.anpm.alibaba-inc.com/@fastify/busboy/-/busboy-3.2.1.tgz 0ms (cache hit)
+npm http cache @fastify/ajv-compiler@https://registry.anpm.alibaba-inc.com/@fastify/ajv-compiler/-/ajv-compiler-4.0.6.tgz 0ms (cache hit)
+npm http cache yargs-parser@https://registry.anpm.alibaba-inc.com/yargs-parser/-/yargs-parser-22.0.0.tgz 0ms (cache hit)
+npm http cache @esbuild/darwin-x64@https://registry.anpm.alibaba-inc.com/@esbuild/darwin-x64/-/darwin-x64-0.28.2.tgz 0ms (cache hit)
+npm http cache yargs@https://registry.anpm.alibaba-inc.com/yargs/-/yargs-18.0.0.tgz 0ms (cache hit)
+npm http cache wrap-ansi@https://registry.anpm.alibaba-inc.com/wrap-ansi/-/wrap-ansi-9.0.2.tgz 0ms (cache hit)
+npm http cache vitest@https://registry.anpm.alibaba-inc.com/vitest/-/vitest-4.1.11.tgz 0ms (cache hit)
+npm http cache vite@https://registry.anpm.alibaba-inc.com/vite/-/vite-8.2.2.tgz 0ms (cache hit)
+npm http cache tsx@https://registry.anpm.alibaba-inc.com/tsx/-/tsx-4.23.12.tgz 0ms (cache hit)
+npm http cache tree-kill@https://registry.anpm.alibaba-inc.com/tree-kill/-/tree-kill-1.2.2.tgz 0ms (cache hit)
+npm http cache undici-types@https://registry.anpm.alibaba-inc.com/undici-types/-/undici-types-8.3.0.tgz 0ms (cache hit)
+npm http cache toad-cache@https://registry.anpm.alibaba-inc.com/toad-cache/-/toad-cache-3.7.4.tgz 0ms (cache hit)
+npm http cache why-is-node-running@https://registry.anpm.alibaba-inc.com/why-is-node-running/-/why-is-node-running-2.3.0.tgz 0ms (cache hit)
+npm http cache supports-color@https://registry.anpm.alibaba-inc.com/supports-color/-/supports-color-10.2.2.tgz 0ms (cache hit)
+npm http cache thread-stream@https://registry.anpm.alibaba-inc.com/thread-stream/-/thread-stream-4.2.0.tgz 0ms (cache hit)
+npm http cache tinyrainbow@https://registry.anpm.alibaba-inc.com/tinyrainbow/-/tinyrainbow-3.1.1.tgz 0ms (cache hit)
+npm http cache tinybench@https://registry.anpm.alibaba-inc.com/tinybench/-/tinybench-2.9.0.tgz 0ms (cache hit)
+npm http cache strip-json-comments@https://registry.anpm.alibaba-inc.com/strip-json-comments/-/strip-json-comments-5.0.3.tgz 0ms (cache hit)
+npm http cache string-width@https://registry.anpm.alibaba-inc.com/string-width/-/string-width-7.2.0.tgz 0ms (cache hit)
+npm http cache std-env@https://registry.anpm.alibaba-inc.com/std-env/-/std-env-4.2.0.tgz 0ms (cache hit)
+npm http cache siginfo@https://registry.anpm.alibaba-inc.com/siginfo/-/siginfo-2.0.0.tgz 0ms (cache hit)
+npm http cache stackback@https://registry.anpm.alibaba-inc.com/stackback/-/stackback-0.0.2.tgz 0ms (cache hit)
+npm http cache sonic-boom@https://registry.anpm.alibaba-inc.com/sonic-boom/-/sonic-boom-4.2.1.tgz 0ms (cache hit)
+npm http cache shell-quote@https://registry.anpm.alibaba-inc.com/shell-quote/-/shell-quote-1.9.0.tgz 0ms (cache hit)
+npm http cache set-cookie-parser@https://registry.anpm.alibaba-inc.com/set-cookie-parser/-/set-cookie-parser-2.7.2.tgz 0ms (cache hit)
+npm http cache split2@https://registry.anpm.alibaba-inc.com/split2/-/split2-4.2.0.tgz 0ms (cache hit)
+npm http cache secure-json-parse@https://registry.anpm.alibaba-inc.com/secure-json-parse/-/secure-json-parse-4.1.0.tgz 0ms (cache hit)
+npm http cache safe-stable-stringify@https://registry.anpm.alibaba-inc.com/safe-stable-stringify/-/safe-stable-stringify-2.5.0.tgz 0ms (cache hit)
+npm http cache scheduler@https://registry.anpm.alibaba-inc.com/scheduler/-/scheduler-0.27.0.tgz 0ms (cache hit)
+npm http cache rolldown@https://registry.anpm.alibaba-inc.com/rolldown/-/rolldown-1.2.5.tgz 0ms (cache hit)
+npm http cache rfdc@https://registry.anpm.alibaba-inc.com/rfdc/-/rfdc-1.4.1.tgz 0ms (cache hit)
+npm http cache rxjs@https://registry.anpm.alibaba-inc.com/rxjs/-/rxjs-7.8.2.tgz 0ms (cache hit)
+npm http cache real-require@https://registry.anpm.alibaba-inc.com/real-require/-/real-require-0.2.0.tgz 0ms (cache hit)
+npm http cache safe-regex2@https://registry.anpm.alibaba-inc.com/safe-regex2/-/safe-regex2-5.1.1.tgz 0ms (cache hit)
+npm http cache ret@https://registry.anpm.alibaba-inc.com/ret/-/ret-0.5.0.tgz 0ms (cache hit)
+npm http cache react-dom@https://registry.anpm.alibaba-inc.com/react-dom/-/react-dom-19.2.8.tgz 0ms (cache hit)
+npm http cache require-from-string@https://registry.anpm.alibaba-inc.com/require-from-string/-/require-from-string-2.0.2.tgz 0ms (cache hit)
+npm http cache react@https://registry.anpm.alibaba-inc.com/react/-/react-19.2.8.tgz 0ms (cache hit)
+npm http cache process-warning@https://registry.anpm.alibaba-inc.com/process-warning/-/process-warning-5.1.0.tgz 0ms (cache hit)
+npm http cache quick-format-unescaped@https://registry.anpm.alibaba-inc.com/quick-format-unescaped/-/quick-format-unescaped-4.0.4.tgz 0ms (cache hit)
+npm http cache pino-pretty@https://registry.anpm.alibaba-inc.com/pino-pretty/-/pino-pretty-13.1.3.tgz 0ms (cache hit)
+npm http cache pino-std-serializers@https://registry.anpm.alibaba-inc.com/pino-std-serializers/-/pino-std-serializers-7.1.0.tgz 0ms (cache hit)
+npm http cache pino@https://registry.anpm.alibaba-inc.com/pino/-/pino-10.3.1.tgz 0ms (cache hit)
+npm http cache pino-abstract-transport@https://registry.anpm.alibaba-inc.com/pino-abstract-transport/-/pino-abstract-transport-3.0.0.tgz 0ms (cache hit)
+npm http cache obug@https://registry.anpm.alibaba-inc.com/obug/-/obug-2.1.4.tgz 0ms (cache hit)
+npm http cache pathe@https://registry.anpm.alibaba-inc.com/pathe/-/pathe-2.0.3.tgz 0ms (cache hit)
+npm http cache on-exit-leak-free@https://registry.anpm.alibaba-inc.com/on-exit-leak-free/-/on-exit-leak-free-2.1.2.tgz 0ms (cache hit)
+npm http cache json-schema-traverse@https://registry.anpm.alibaba-inc.com/json-schema-traverse/-/json-schema-traverse-1.0.0.tgz 0ms (cache hit)
+npm http cache json-schema-ref-resolver@https://registry.anpm.alibaba-inc.com/json-schema-ref-resolver/-/json-schema-ref-resolver-3.0.0.tgz 0ms (cache hit)
+npm http cache light-my-request@https://registry.anpm.alibaba-inc.com/light-my-request/-/light-my-request-6.6.0.tgz 0ms (cache hit)
+npm http cache lightningcss@https://registry.anpm.alibaba-inc.com/lightningcss/-/lightningcss-1.33.0.tgz 0ms (cache hit)
+npm http cache lightningcss-darwin-x64@https://registry.anpm.alibaba-inc.com/lightningcss-darwin-x64/-/lightningcss-darwin-x64-1.33.0.tgz 0ms (cache hit)
+npm http cache help-me@https://registry.anpm.alibaba-inc.com/help-me/-/help-me-5.0.0.tgz 0ms (cache hit)
+npm http cache ipaddr.js@https://registry.anpm.alibaba-inc.com/ipaddr.js/-/ipaddr.js-2.5.0.tgz 0ms (cache hit)
+npm http cache joycon@https://registry.anpm.alibaba-inc.com/joycon/-/joycon-3.1.1.tgz 0ms (cache hit)
+npm http cache fastify@https://registry.anpm.alibaba-inc.com/fastify/-/fastify-5.12.1.tgz 0ms (cache hit)
+npm http cache find-my-way@https://registry.anpm.alibaba-inc.com/find-my-way/-/find-my-way-9.8.0.tgz 0ms (cache hit)
+npm http cache fast-uri@https://registry.anpm.alibaba-inc.com/fast-uri/-/fast-uri-4.1.2.tgz 0ms (cache hit)
+npm http cache fast-safe-stringify@https://registry.anpm.alibaba-inc.com/fast-safe-stringify/-/fast-safe-stringify-2.1.1.tgz 0ms (cache hit)
+npm http cache fastify-plugin@https://registry.anpm.alibaba-inc.com/fastify-plugin/-/fastify-plugin-6.0.0.tgz 0ms (cache hit)
+npm http cache fast-decode-uri-component@https://registry.anpm.alibaba-inc.com/fast-decode-uri-component/-/fast-decode-uri-component-1.0.1.tgz 0ms (cache hit)
+npm http cache fast-copy@https://registry.anpm.alibaba-inc.com/fast-copy/-/fast-copy-4.0.4.tgz 0ms (cache hit)
+npm http cache fast-querystring@https://registry.anpm.alibaba-inc.com/fast-querystring/-/fast-querystring-1.1.2.tgz 0ms (cache hit)
+npm http cache fast-json-stringify@https://registry.anpm.alibaba-inc.com/fast-json-stringify/-/fast-json-stringify-7.0.1.tgz 0ms (cache hit)
+npm http cache expect-type@https://registry.anpm.alibaba-inc.com/expect-type/-/expect-type-1.4.0.tgz 0ms (cache hit)
+npm http cache esbuild@https://registry.anpm.alibaba-inc.com/esbuild/-/esbuild-0.28.2.tgz 0ms (cache hit)
+npm http cache estree-walker@https://registry.anpm.alibaba-inc.com/estree-walker/-/estree-walker-3.0.3.tgz 0ms (cache hit)
+npm http cache es-module-lexer@https://registry.anpm.alibaba-inc.com/es-module-lexer/-/es-module-lexer-2.3.2.tgz 0ms (cache hit)
+npm http cache emoji-regex@https://registry.anpm.alibaba-inc.com/emoji-regex/-/emoji-regex-10.6.0.tgz 0ms (cache hit)
+npm http cache cookie@https://registry.anpm.alibaba-inc.com/cookie/-/cookie-1.1.1.tgz 0ms (cache hit)
+npm http cache dateformat@https://registry.anpm.alibaba-inc.com/dateformat/-/dateformat-4.6.3.tgz 0ms (cache hit)
+npm http cache colorette@https://registry.anpm.alibaba-inc.com/colorette/-/colorette-2.0.20.tgz 0ms (cache hit)
+npm http cache cliui@https://registry.anpm.alibaba-inc.com/cliui/-/cliui-9.0.1.tgz 0ms (cache hit)
+npm http cache concurrently@https://registry.anpm.alibaba-inc.com/concurrently/-/concurrently-10.0.5.tgz 0ms (cache hit)
+npm http cache chai@https://registry.anpm.alibaba-inc.com/chai/-/chai-6.2.2.tgz 0ms (cache hit)
+npm http cache assertion-error@https://registry.anpm.alibaba-inc.com/assertion-error/-/assertion-error-2.0.1.tgz 0ms (cache hit)
+npm http cache avvio@https://registry.anpm.alibaba-inc.com/avvio/-/avvio-9.3.0.tgz 0ms (cache hit)
+npm http cache atomic-sleep@https://registry.anpm.alibaba-inc.com/atomic-sleep/-/atomic-sleep-1.0.0.tgz 0ms (cache hit)
+npm http cache ajv-formats@https://registry.anpm.alibaba-inc.com/ajv-formats/-/ajv-formats-3.0.1.tgz 0ms (cache hit)
+npm http cache abstract-logging@https://registry.anpm.alibaba-inc.com/abstract-logging/-/abstract-logging-2.0.1.tgz 0ms (cache hit)
+npm http cache ajv@https://registry.anpm.alibaba-inc.com/ajv/-/ajv-8.20.0.tgz 0ms (cache hit)
+npm http cache real-require@https://registry.anpm.alibaba-inc.com/real-require/-/real-require-1.0.0.tgz 0ms (cache hit)
+npm http cache process-warning@https://registry.anpm.alibaba-inc.com/process-warning/-/process-warning-4.0.1.tgz 0ms (cache hit)
+npm http cache fast-uri@https://registry.anpm.alibaba-inc.com/fast-uri/-/fast-uri-3.1.5.tgz 0ms (cache hit)
+npm http fetch POST 404 https://registry.npmmirror.com/-/npm/v1/security/advisories/bulk 393ms
+npm http fetch POST 404 https://registry.npmmirror.com/-/npm/v1/security/audits/quick 19ms
+npm verbose audit error HttpErrorGeneral: 404 Not Found - POST https://registry.npmmirror.com/-/npm/v1/security/audits/quick - [NOT_IMPLEMENTED] /-/npm/v1/security/* not implemented yet
+npm verbose audit error     at /usr/local/lib/node_modules/npm/node_modules/npm-registry-fetch/lib/check-response.js:103:15
+npm verbose audit error     at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+npm verbose audit error     at async [getReport] (/usr/local/lib/node_modules/npm/node_modules/@npmcli/arborist/lib/audit-report.js:336:21)
+npm verbose audit error     at async AuditReport.run (/usr/local/lib/node_modules/npm/node_modules/@npmcli/arborist/lib/audit-report.js:106:19) {
+npm verbose audit error   headers: [Object: null prototype] {
+npm verbose audit error     server: [ 'Tengine' ],
+npm verbose audit error     date: [ 'Fri, 21 Aug 2026 12:03:23 GMT' ],
+npm verbose audit error     'content-type': [ 'application/json' ],
+npm verbose audit error     'transfer-encoding': [ 'chunked' ],
+npm verbose audit error     connection: [ 'keep-alive' ],
+npm verbose audit error     'strict-transport-security': [ 'max-age=5184000' ],
+npm verbose audit error     via: [ 'kunlun8.cn7971[,404666]' ],
+npm verbose audit error     'timing-allow-origin': [ '*' ],
+npm verbose audit error     eagleid: [ '7ae4d61c17873138031938012e' ],
+npm verbose audit error     'x-fetch-attempts': [ '1' ]
+npm verbose audit error   },
+npm verbose audit error   statusCode: 404,
+npm verbose audit error   code: 'E404',
+npm verbose audit error   method: 'POST',
+npm verbose audit error   uri: 'https://registry.npmmirror.com/-/npm/v1/security/audits/quick',
+npm verbose audit error   body: {
+npm verbose audit error     error: '[NOT_IMPLEMENTED] /-/npm/v1/security/* not implemented yet'
+npm verbose audit error   },
+npm verbose audit error   pkgid: undefined
+npm verbose audit error }
+npm http fetch GET https://registry.anpm.alibaba-inc.com/@vitest/expect/-/expect-4.1.11.tgz attempt 1 failed with ECONNRESET
+npm http fetch GET https://registry.anpm.alibaba-inc.com/@vitest/utils/-/utils-4.1.11.tgz attempt 1 failed with ECONNRESET
+npm http fetch GET https://registry.anpm.alibaba-inc.com/@vitest/spy/-/spy-4.1.11.tgz attempt 1 failed with ECONNRESET
+npm http fetch GET https://registry.anpm.alibaba-inc.com/@vitest/runner/-/runner-4.1.11.tgz attempt 1 failed with ECONNRESET
+npm http fetch GET https://registry.anpm.alibaba-inc.com/@vitest/snapshot/-/snapshot-4.1.11.tgz attempt 1 failed with ECONNRESET
+npm http fetch GET https://registry.anpm.alibaba-inc.com/@vitest/mocker/-/mocker-4.1.11.tgz attempt 1 failed with ECONNRESET
+npm http fetch GET https://registry.anpm.alibaba-inc.com/@types/react-dom/-/react-dom-19.2.4.tgz attempt 1 failed with ECONNRESET
+npm http fetch GET https://registry.anpm.alibaba-inc.com/@standard-schema/spec/-/spec-1.1.0.tgz attempt 1 failed with ECONNRESET
+npm http fetch GET https://registry.anpm.alibaba-inc.com/@types/node/-/node-26.2.0.tgz attempt 1 failed with ECONNRESET
+npm http fetch GET https://registry.anpm.alibaba-inc.com/@vitejs/plugin-react/-/plugin-react-6.1.0.tgz attempt 1 failed with ECONNRESET
+npm http fetch GET https://registry.anpm.alibaba-inc.com/@types/deep-eql/-/deep-eql-4.0.2.tgz attempt 1 failed with ECONNRESET
+npm http fetch GET https://registry.anpm.alibaba-inc.com/@vitest/pretty-format/-/pretty-format-4.1.11.tgz attempt 1 failed with ECONNRESET
+npm http fetch GET https://registry.anpm.alibaba-inc.com/@types/chai/-/chai-5.2.3.tgz attempt 1 failed with ECONNRESET
+npm http fetch GET https://registry.anpm.alibaba-inc.com/@rolldown/binding-darwin-x64/-/binding-darwin-x64-1.2.5.tgz attempt 1 failed with ECONNRESET
+npm http fetch GET https://registry.anpm.alibaba-inc.com/@oxc-project/types/-/types-0.146.0.tgz attempt 1 failed with ECONNRESET
+⠋^C
+shixiangweii@shixiangweiideMacBook-Pro sxw_tcpdump_analyze %
+shixiangweii@shixiangweiideMacBook-Pro sxw_tcpdump_analyze %
+
+
