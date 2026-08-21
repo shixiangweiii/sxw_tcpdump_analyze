@@ -1,0 +1,23 @@
+{
+  "name": "sxw_tcpdump_analyze",
+  "version": "1.0.0",
+  "description": "对新手友好的 pcap TCP 连接可视化分析器",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/core",
+    "packages/server",
+    "packages/web"
+  ],
+  "scripts": {
+    "build": "npm run build -w @tcpview/core && npm run build -w @tcpview/server && npm run build -w @tcpview/web",
+    "dev": "npm run build -w @tcpview/core && concurrently -n core,server,web -c gray,cyan,magenta \"npm run dev -w @tcpview/core\" \"npm run dev -w @tcpview/server\" \"npm run dev -w @tcpview/web\"",
+    "test": "npm run test -w @tcpview/core",
+    "fixtures": "npm run fixtures -w @tcpview/core",
+    "verify:tshark": "node scripts/tshark-diff.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5",
+    "typescript": "^6.0.3"
+  }
+}

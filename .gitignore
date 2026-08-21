@@ -1,0 +1,26 @@
+/tmp
+/out-tsc
+
+/node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+/.pnp
+.pnp.js
+
+.vscode/*
+
+
+.idea
+
+# 构建产物
+dist/
+*.tsbuildinfo
+
+# 合成夹具由 npm run fixtures 生成，不入库
+packages/core/fixtures/
+
+# 用户自己的抓包文件不应该被误提交（可能含敏感流量）
+*.pcap
+*.pcapng
+*.cap
