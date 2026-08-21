@@ -1,4 +1,4 @@
-import { Fragment } from 'react';
+import { useEffect, useRef } from 'react';
 import type {
   AppSpan,
   Connection,
@@ -7,6 +7,7 @@ import type {
   HttpTransaction,
 } from '@tcpview/core';
 import { anomalyLabel, formatDuration } from '@tcpview/core';
+import { formatSeq } from '../packet-text';
 
 const HEADER_HEIGHT = 52;
 // 人话注解是这个工具的核心价值，布局优先保证它完整可见。
@@ -15,11 +16,23 @@ const LEFT_LANE = 140;
 const RIGHT_LANE = 470;
 const BADGE_X = RIGHT_LANE + 38;
 const BADGE_WIDTH = 54;
+// 演示模式的飞行距离，与 styles.css 里 demo-fly-right 的 330px 必须一起改
+const FLY_DISTANCE = RIGHT_LANE - LEFT_LANE;
+
+/** 演示模式的渐进视图：已落笔的行数 + 正在飞行的行下标 */
+export interface DemoView {
+  playedCount: number;
+  flyingIndex: number | null;
+}
 
 interface Props {
   connection: Connection;
   selectedPacketIndex: number | null;
   onSelectPacket: (packetIndex: number | null) => void;
+  /** null = 静态全图；传入即按「已播多少行」渐进渲染 */
+  demo: DemoView | null;
+  /** 飞行动画播完（包「到达」）。由 ConnectionWorkbench 落笔并联动选中 */
+  onFlightEnd: () => void;
 }
 
 /**
@@ -35,17 +48,48 @@ interface Props {
  * 表头跟着滚走的话，滚到中段就不知道左右两条生命线各是谁了。
  * 吸顶元素只锁纵向，横向仍跟着内容走，所以表头始终对齐在生命线正上方。
  */
-export function LadderDiagram({ connection, selectedPacketIndex, onSelectPacket }: Props) {
+export function LadderDiagram({
+  connection,
+  selectedPacketIndex,
+  onSelectPacket,
+  demo,
+  onFlightEnd,
+}: Props) {
   // 有应用层注解时每行要多放一行字，行高与注解起始位置都跟着变
   const hasAppLayer = connection.packets.some((packet) => packet.appNote !== null);
   const rowHeight = hasAppLayer ? 80 : 62;
   const noteX = hasAppLayer ? BADGE_X + BADGE_WIDTH + 10 : RIGHT_LANE + 38;
   const canvasWidth = noteX + 570;
 
-  const bodyHeight = connection.packets.length * rowHeight + 16;
+  const visiblePackets = demo ? connection.packets.slice(0, demo.playedCount) : connection.packets;
+  // 开局至少留 3 行高度：只剩两条生命线时也还是一张「等待落笔」的图
+  const rowCount = demo ? Math.max(demo.playedCount, 3) : connection.packets.length;
+  const bodyHeight = rowCount * rowHeight + 16;
+
+  const flyingIndex = demo?.flyingIndex ?? null;
+  const flyingPacket = flyingIndex !== null ? (connection.packets[flyingIndex] ?? null) : null;
+
+  const ladderRef = useRef<HTMLDivElement>(null);
+  const demoActive = demo !== null;
+  const playedCount = demo?.playedCount ?? 0;
+
+  /**
+   * 演示每落一笔就把新行滚进视野。直接算 .ladder 自己的 scrollTop 而不用
+   * scrollIntoView：后者会连带滚动外层容器（嵌套滚动容器上还有静默失效的前科）。
+   */
+  useEffect(() => {
+    const el = ladderRef.current;
+    if (!demoActive || !el) return;
+    if (playedCount === 0) {
+      el.scrollTop = 0;
+      return;
+    }
+    const rowY = HEADER_HEIGHT + (playedCount - 1) * rowHeight + rowHeight / 2;
+    el.scrollTop = Math.max(0, rowY - el.clientHeight / 2);
+  }, [demoActive, playedCount, rowHeight]);
 
   return (
-    <div className="ladder">
+    <div className="ladder" ref={ladderRef}>
       <div className="ladder-head" style={{ width: canvasWidth }}>
         <svg width={canvasWidth} height={HEADER_HEIGHT} role="presentation">
           <text x={LEFT_LANE} y={20} className="lane-title" textAnchor="middle">
@@ -72,7 +116,7 @@ export function LadderDiagram({ connection, selectedPacketIndex, onSelectPacket 
         <line x1={LEFT_LANE} y1={0} x2={LEFT_LANE} y2={bodyHeight - 8} className="lifeline" />
         <line x1={RIGHT_LANE} y1={0} x2={RIGHT_LANE} y2={bodyHeight - 8} className="lifeline" />
 
-        {connection.packets.map((packet, index) => (
+        {visiblePackets.map((packet, index) => (
           <PacketRow
             key={`${packet.packetIndex}-${index}`}
             packet={packet}
@@ -87,11 +131,52 @@ export function LadderDiagram({ connection, selectedPacketIndex, onSelectPacket 
                 : null
             }
             selected={selectedPacketIndex === packet.packetIndex}
-            onSelect={onSelectPacket}
+            // 演示中选中只由播放驱动，行不给点；onSelect 传 undefined 即不响应
+            onSelect={demo ? undefined : onSelectPacket}
+            demoEnter={demo !== null}
           />
         ))}
+
+        {flyingPacket && flyingIndex !== null && (
+          <FlyingPacket
+            packet={flyingPacket}
+            y={flyingIndex * rowHeight + rowHeight / 2}
+            onEnd={onFlightEnd}
+          />
+        )}
       </svg>
     </div>
+  );
+}
+
+/**
+ * 演示模式的飞行包：一个带标志位的小图标从发送端飞到接收端。
+ *
+ * 外层 g 用 SVG transform 属性定位到行高所在位置（起点在左侧泳道），
+ * 内层 g 用 CSS keyframes 平移 FLY_DISTANCE——两套 transform 互不干扰，
+ * 所以 keyframes 可以写死距离、s2c 直接 reverse 同一条动画。
+ */
+function FlyingPacket({
+  packet,
+  y,
+  onEnd,
+}: {
+  packet: ConnectionPacket;
+  y: number;
+  onEnd: () => void;
+}) {
+  const label = packet.flags.join('·');
+  const width = Math.max(52, label.length * 9 + 22);
+
+  return (
+    <g transform={`translate(${LEFT_LANE}, ${y})`}>
+      <g className={`demo-fly ${packet.direction}`} onAnimationEnd={onEnd}>
+        <rect x={-6} y={-13} width={width} height={26} rx={6} className="demo-packet-box" />
+        <text x={width / 2 - 6} y={4.5} className="demo-packet-text" textAnchor="middle">
+          {label}
+        </text>
+      </g>
+    </g>
   );
 }
 
@@ -104,7 +189,10 @@ interface RowProps {
   seqBaseEstimated: boolean;
   transaction: HttpTransaction | null;
   selected: boolean;
-  onSelect: (packetIndex: number | null) => void;
+  /** undefined 时整行不响应点击（演示模式） */
+  onSelect?: (packetIndex: number | null) => void;
+  /** 演示模式下新落笔的行带入场淡入 */
+  demoEnter: boolean;
 }
 
 function PacketRow({
@@ -117,6 +205,7 @@ function PacketRow({
   transaction,
   selected,
   onSelect,
+  demoEnter,
 }: RowProps) {
   const toRight = packet.direction === 'c2s';
   const startX = toRight ? LEFT_LANE : RIGHT_LANE;
@@ -124,13 +213,13 @@ function PacketRow({
 
   const severity = worstSeverity(packet);
   const arrowClass = `arrow ${severity}`;
-  const clickable = packet.appSpan !== null;
+  const clickable = packet.appSpan !== null && onSelect !== undefined;
 
   // 有应用层注解时它占掉第一行，异常注解顺次下移
   const anomalyBaseline = packet.appNote ? y + 30 : y + 13;
 
   return (
-    <Fragment>
+    <g className={demoEnter ? 'demo-row-in' : undefined}>
       {/* 整行的点击热区。只有承载了报文的包才可选——纯 ACK 点了也没有正文可高亮 */}
       <rect
         x={0}
@@ -186,7 +275,7 @@ function PacketRow({
           ⚠ {anomalyLabel(anomaly.kind).text}：{anomaly.detail}
         </text>
       ))}
-    </Fragment>
+    </g>
   );
 }
 
@@ -203,7 +292,7 @@ function AppBadge({
   const { text, tone } = badgeContent(span, transaction);
 
   return (
-    <Fragment>
+    <>
       <rect
         x={BADGE_X}
         y={y - 11}
@@ -220,7 +309,7 @@ function AppBadge({
       >
         {text}
       </text>
-    </Fragment>
+    </>
   );
 }
 
@@ -270,30 +359,6 @@ function appNoteTone(span: AppSpan | null): string {
   if (!span) return '';
   if (span.duplicate) return 'dup';
   return span.part === 'start-line' || span.part === 'mixed' ? 'start' : '';
-}
-
-/**
- * 序号同时给出相对值和原始值。
- * 相对值让人看得懂（从 0 开始数），原始值让人能跟 Wireshark 对照。
- * 基准为估算时用 ≈ 替掉 =（而不是追加），否则 seq=≈0 会看成 seq==0。
- */
-function formatSeq(packet: ConnectionPacket, estimated: boolean): string {
-  const parts: string[] = [];
-  const eq = estimated ? '≈' : '=';
-
-  parts.push(`seq${eq}${packet.relSeq ?? '?'} (${packet.rawSeq})`);
-  if (packet.relAck !== null) {
-    parts.push(`ack${eq}${packet.relAck} (${packet.rawAck})`);
-  }
-  if (packet.payloadLength > 0) {
-    parts.push(`len=${packet.payloadLength}`);
-  }
-  if (packet.scaledWindow !== null) {
-    parts.push(`win=${packet.scaledWindow}`);
-  } else {
-    parts.push(`win=${packet.window}?`);
-  }
-  return parts.join('  ');
 }
 
 function arrowHead(x: number, y: number, toRight: boolean): string {

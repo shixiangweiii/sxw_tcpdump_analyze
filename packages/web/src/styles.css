@@ -678,6 +678,171 @@ pre {
   fill: var(--warn);
 }
 
+/* ---------------------------------------------------------------- 动态演示 */
+
+/*
+ * 演示模式的飞行包：从左侧泳道平移到右侧泳道。
+ * 330px = RIGHT_LANE − LEFT_LANE（LadderDiagram 的 FLY_DISTANCE），改泳道位置时两处同步。
+ * s2c 方向直接 reverse 同一条动画，从服务端飞回客户端。
+ */
+@keyframes demo-fly-right {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(330px);
+  }
+}
+
+.demo-fly.c2s {
+  animation: demo-fly-right 600ms ease-in-out forwards;
+}
+
+.demo-fly.s2c {
+  animation: demo-fly-right 600ms ease-in-out forwards reverse;
+}
+
+.demo-packet-box {
+  fill: rgba(90, 162, 255, 0.18);
+  stroke: var(--accent);
+  stroke-width: 1.2;
+}
+
+.demo-packet-text {
+  fill: var(--accent);
+  font-size: 11px;
+  font-family: var(--mono);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+/* 演示中刚落笔的行淡入出现 */
+@keyframes demo-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.demo-row-in {
+  animation: demo-fade-in 250ms ease-out;
+}
+
+/* 头部的演示按钮与工具条，观感沿用 nav-btn */
+.workbench-demo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.demo-btn {
+  padding: 3px 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.demo-btn:hover:not(:disabled) {
+  background: var(--panel-2);
+  border-color: var(--accent);
+}
+
+.demo-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* 右栏顶部的当前包信息条 */
+.demo-info {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+
+.demo-info-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.demo-info-pos {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.demo-info-index {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.demo-info-dir {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.demo-info-flags {
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.demo-info-seq {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: #cdd6e6;
+  word-break: break-all;
+}
+
+.demo-info-note {
+  margin-top: 6px;
+  color: #cdd6e6;
+}
+
+.demo-info-app {
+  margin-top: 2px;
+  color: #8fa6c8;
+  font-size: 12px;
+}
+
+.demo-info-anomaly {
+  margin-top: 2px;
+  font-size: 12px;
+}
+
+.demo-info-anomaly.warn {
+  color: var(--warn);
+}
+
+.demo-info-anomaly.bad {
+  color: var(--bad);
+}
+
+.demo-info-anomaly.neutral {
+  color: var(--muted);
+}
+
+/* 动画敏感人群：时长压到近 0，animationend 照常触发，单步功能不受影响 */
+@media (prefers-reduced-motion: reduce) {
+  .demo-fly.c2s,
+  .demo-fly.s2c,
+  .demo-row-in {
+    animation-duration: 1ms;
+  }
+}
+
 /* ---------------------------------------------------------------- HTTP 事务 */
 
 .http-transactions {
