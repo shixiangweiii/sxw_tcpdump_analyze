@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import type { AppSpan, HttpAnalysis, HttpMessage, HttpTiming, HttpTransaction } from '@tcpview/core';
 import { formatBytes, formatDuration } from '@tcpview/core';
 
@@ -12,8 +13,21 @@ interface Props {
  *
  * 用 HTML 而不是画进梯形图的 SVG：报文正文要换行、要能选中复制，SVG 都做不到。
  * 这里是「回显」的主视图，梯形图只负责标出每个包对应哪一段。
+ *
+ * 多事务时按手风琴折叠，只展开一条。左右分栏之后翻找的距离就是这一栏的滚动距离，
+ * 十几个事务全摊开的话，点了梯形图还得在这一栏里再找一遍，等于没解决问题。
  */
 export function HttpTransactions({ http, selectedSpan }: Props) {
+  const foldable = http.transactions.length > 1;
+  const [openIndex, setOpenIndex] = useState<number | null>(
+    http.transactions[0]?.index ?? null,
+  );
+
+  // 选中的包属于哪个事务，就把哪个事务翻出来——否则高亮落在折叠起来的卡片里，点了没反应
+  useEffect(() => {
+    if (selectedSpan) setOpenIndex(selectedSpan.transactionIndex);
+  }, [selectedSpan]);
+
   return (
     <div className="http-transactions">
       <QualityNotice quality={http.quality} />
@@ -21,6 +35,11 @@ export function HttpTransactions({ http, selectedSpan }: Props) {
         <TransactionCard
           key={transaction.index}
           transaction={transaction}
+          foldable={foldable}
+          open={!foldable || openIndex === transaction.index}
+          onToggle={() =>
+            setOpenIndex(openIndex === transaction.index ? null : transaction.index)
+          }
           selectedSpan={
             selectedSpan?.transactionIndex === transaction.index ? selectedSpan : null
           }
@@ -79,37 +98,58 @@ function NoticeBlock({ tone, notes }: { tone: 'warn' | 'info'; notes: string[] }
 
 function TransactionCard({
   transaction,
+  foldable,
+  open,
+  onToggle,
   selectedSpan,
 }: {
   transaction: HttpTransaction;
+  foldable: boolean;
+  open: boolean;
+  onToggle: () => void;
   selectedSpan: AppSpan | null;
 }) {
+  const head = (
+    <>
+      {foldable && <span className="http-caret">{open ? '▾' : '▸'}</span>}
+      <span className="http-index">#{transaction.index}</span>
+      <span className="http-note">{transaction.note}</span>
+    </>
+  );
+
   return (
-    <div className="http-card">
-      <div className="http-card-head">
-        <span className="http-index">#{transaction.index}</span>
-        <span className="http-note">{transaction.note}</span>
-      </div>
-
-      <TimingBar timing={transaction.timing} />
-
-      {transaction.request && (
-        <MessageBlock
-          message={transaction.request}
-          span={selectedSpan?.messageKind === 'request' ? selectedSpan : null}
-        />
-      )}
-      {/* 100 Continue 之类的中间响应。不算独立事务，但抓包里确实有，不能藏起来 */}
-      {transaction.informationalResponses.map((message, i) => (
-        <MessageBlock key={`info-${i}`} message={message} span={null} />
-      ))}
-      {transaction.response ? (
-        <MessageBlock
-          message={transaction.response}
-          span={selectedSpan?.messageKind === 'response' ? selectedSpan : null}
-        />
+    <div className={`http-card ${open ? 'open' : 'folded'}`}>
+      {foldable ? (
+        <button className="http-card-head foldable" onClick={onToggle}>
+          {head}
+        </button>
       ) : (
-        <div className="http-message empty">抓包里没有这个请求的响应。</div>
+        <div className="http-card-head">{head}</div>
+      )}
+
+      {open && (
+        <>
+          <TimingBar timing={transaction.timing} />
+
+          {transaction.request && (
+            <MessageBlock
+              message={transaction.request}
+              span={selectedSpan?.messageKind === 'request' ? selectedSpan : null}
+            />
+          )}
+          {/* 100 Continue 之类的中间响应。不算独立事务，但抓包里确实有，不能藏起来 */}
+          {transaction.informationalResponses.map((message, i) => (
+            <MessageBlock key={`info-${i}`} message={message} span={null} />
+          ))}
+          {transaction.response ? (
+            <MessageBlock
+              message={transaction.response}
+              span={selectedSpan?.messageKind === 'response' ? selectedSpan : null}
+            />
+          ) : (
+            <div className="http-message empty">抓包里没有这个请求的响应。</div>
+          )}
+        </>
       )}
     </div>
   );
@@ -178,9 +218,27 @@ function TimingBar({ timing }: { timing: HttpTiming }) {
 
 function MessageBlock({ message, span }: { message: HttpMessage; span: AppSpan | null }) {
   const isRequest = message.kind === 'request';
+  const blockRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * 把选中包对应的位置滚进视野。少了这一步，左右分栏也只解决一半问题：
+   * 正文自己还有一个 420px 的滚动框，高亮多半落在框外，仍然要手动找。
+   * scrollIntoView 会把所有可滚动祖先一起滚到位，正文框和整栏一次搞定。
+   *
+   * 落点优先取高亮块；承载起始行或头部的包没有正文高亮（textFrom 为 null），
+   * 退回滚到这条消息本身，至少让人看到是请求还是响应。
+   *
+   * 用默认的瞬时滚动而不是 smooth：smooth 在嵌套滚动容器上会静默失效（实测正文框纹丝不动），
+   * 而且连着点好几个包时，动画反而让人等。
+   */
+  useEffect(() => {
+    if (!span) return;
+    const target = blockRef.current?.querySelector('.http-span-highlight') ?? blockRef.current;
+    target?.scrollIntoView({ block: 'center' });
+  }, [span]);
 
   return (
-    <div className={`http-message ${isRequest ? 'request' : 'response'}`}>
+    <div className={`http-message ${isRequest ? 'request' : 'response'}`} ref={blockRef}>
       <div className="http-start-line">
         <span className="http-dir">{isRequest ? '请求 →' : '← 响应'}</span>
         <code>{message.startLine}</code>

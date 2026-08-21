@@ -427,9 +427,10 @@ pre {
   background: var(--panel-2);
 }
 
-.row.expanded {
+/* 从工作台返回后标出刚才看的是哪一条，接着往下翻不用重新找 */
+.row.active {
   background: var(--panel-2);
-  border-bottom: 1px solid var(--border);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .row-caret {
@@ -476,11 +477,6 @@ pre {
   font-family: var(--mono);
 }
 
-.detail {
-  padding: 16px;
-  background: #12151d;
-}
-
 .empty-state,
 .empty {
   padding: 40px;
@@ -490,12 +486,27 @@ pre {
 
 /* ---------------------------------------------------------------- 梯形图 */
 
+/*
+ * 梯形图自己就是滚动容器，而不是让外层的栏去滚。
+ * 吸顶的泳道表头是相对「最近的滚动祖先」定位的，交给外层滚的话，
+ * .ladder 因为有 overflow-x 同样算滚动容器，表头会吸在一个永远不滚的盒子上，等于没吸。
+ */
 .ladder {
-  overflow-x: auto;
+  overflow: auto;
+  /* 窄屏堆叠时别让几千像素的梯形图把报文顶到视野之外 */
+  max-height: 60vh;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 8px 0;
+  padding: 0 0 8px;
+}
+
+.ladder-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
 }
 
 .lifeline {
@@ -599,6 +610,19 @@ pre {
   fill: transparent;
 }
 
+/*
+ * 行里的文字、箭头、徽章一律不吃点击，让它穿透到底下那层整行热区上。
+ *
+ * SVG 里这些元素和热区 rect 是兄弟不是子元素，谁在上面谁接住事件，
+ * 冒泡也到不了热区。不挡掉的话，注解和徽章这些最显眼、最想点的地方反而没反应。
+ */
+.ladder text,
+.ladder line,
+.ladder polygon,
+.app-badge-box {
+  pointer-events: none;
+}
+
 .row-hit.clickable {
   cursor: pointer;
 }
@@ -679,6 +703,28 @@ pre {
   align-items: baseline;
   gap: 10px;
   margin-bottom: 12px;
+}
+
+/* 多事务时整条标题栏就是折叠开关 */
+.http-card-head.foldable {
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: none;
+  text-align: left;
+}
+
+.http-card.folded .http-card-head {
+  margin-bottom: 0;
+}
+
+.http-card-head.foldable:hover .http-note {
+  color: var(--accent);
+}
+
+.http-caret {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .http-index {
@@ -842,4 +888,145 @@ pre {
   background: rgba(90, 162, 255, 0.28);
   color: var(--text);
   border-radius: 2px;
+}
+
+/* ---------------------------------------------------------------- 连接工作台 */
+
+/*
+ * 单条连接占满整页的两栏布局。
+ *
+ * 梯形图和报文都是高度无上限的东西，塞在同一个页面滚动条里就会出现
+ * 「在梯形图底部点一个包，高亮却在几千像素之上」。整页之后两栏各占满视口高度、
+ * 各自独立滚动，点哪一行报文就在旁边——这是这个布局存在的唯一理由。
+ */
+.workbench {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  padding: 0 16px 16px;
+}
+
+.workbench-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: none;
+  flex-wrap: wrap;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.workbench-endpoints {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.workbench-stats {
+  display: flex;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+/* 翻页推到最右，跟左边的返回入口分开，免得两个反向操作挨在一起点错 */
+.workbench-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.nav-btn {
+  width: 28px;
+  height: 26px;
+  padding: 0;
+  line-height: 1;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+}
+
+.nav-btn:hover:not(:disabled) {
+  background: var(--panel-2);
+  border-color: var(--accent);
+}
+
+.nav-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.nav-pos {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12.5px;
+}
+
+.workbench-error {
+  flex: none;
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+
+/* 窄屏（< 1500px）：两栏放不下，退回上下堆叠，整列一起滚 */
+.workbench-panes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-top: 16px;
+}
+
+.workbench-panes.loading {
+  opacity: 0.5;
+}
+
+.workbench-pane {
+  min-width: 0;
+}
+
+/*
+ * ≥ 1500px：分栏。这一档给不满梯形图想要的 1142px（人话注解列独占 570px），
+ * 差的部分由 .ladder 自带的横向滚动补——注解在最右边，横拖一下就到，
+ * 而报文栏就在旁边，比上下堆叠划算。
+ */
+@media (min-width: 1500px) {
+  .workbench-panes {
+    grid-template-columns: minmax(0, 1fr) 560px;
+    overflow-y: hidden;
+  }
+
+  .workbench-pane {
+    min-height: 0;
+  }
+
+  /* 梯形图那一栏不自己滚，交给内部的 .ladder，否则吸顶表头会失效 */
+  .pane-ladder {
+    overflow: hidden;
+  }
+
+  .pane-ladder .ladder {
+    height: 100%;
+    max-height: none;
+  }
+
+  .pane-messages {
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+}
+
+/* ≥ 1840px：梯形图栏拿到完整的 1160px，不再需要横滚；余下宽度都给报文栏 */
+@media (min-width: 1840px) {
+  .workbench-panes {
+    grid-template-columns: 1160px minmax(620px, 1fr);
+  }
 }

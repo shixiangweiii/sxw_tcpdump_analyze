@@ -1,49 +1,29 @@
-import { useEffect, useMemo, useState } from 'react';
-import type { Connection, ConnectionOutcome } from '@tcpview/core';
+import { useMemo } from 'react';
 import { formatBytes, formatDuration, outcomeLabel } from '@tcpview/core';
 import type { ConnectionsResponse, ConnectionSummary } from '../api';
-import { HttpTransactions } from './HttpTransactions';
-import { LadderDiagram } from './LadderDiagram';
+import { availableFilters, type Filter } from '../connection-filter';
 
 interface Props {
   view: ConnectionsResponse;
-  expandedId: string | null;
-  expanded: Connection | null;
+  /** 已按 filter 过滤好的连接。过滤在 App 里做，工作台翻页要跟随同一份顺序 */
+  connections: ConnectionSummary[];
+  filter: Filter;
+  onFilterChange: (filter: Filter) => void;
+  activeId: string | null;
   loadingId: string | null;
-  onToggle: (connectionId: string) => void;
+  onOpen: (connectionId: string) => void;
 }
 
-type Filter = 'all' | ConnectionOutcome | 'has-anomaly';
-
-const FILTERS: { key: Filter; text: string }[] = [
-  { key: 'all', text: '全部' },
-  { key: 'has-anomaly', text: '只看有异常的' },
-  { key: 'established-closed', text: '正常关闭' },
-  { key: 'established-reset', text: '被 RST 中断' },
-  { key: 'established-open', text: '仍在连接中' },
-  { key: 'failed-no-response', text: 'SYN 无响应' },
-  { key: 'failed-refused', text: '被拒绝' },
-  { key: 'handshake-missing', text: '握手未捕获' },
-];
-
-export function ConnectionList({ view, expandedId, expanded, loadingId, onToggle }: Props) {
-  const [filter, setFilter] = useState<Filter>('all');
-
-  const connections = useMemo(() => {
-    if (filter === 'all') return view.connections;
-    if (filter === 'has-anomaly') return view.connections.filter(hasAnomaly);
-    return view.connections.filter((connection) => connection.outcome === filter);
-  }, [view.connections, filter]);
-
-  const available = useMemo(() => {
-    const present = new Set(view.connections.map((connection) => connection.outcome));
-    return FILTERS.filter(
-      (item) =>
-        item.key === 'all' ||
-        (item.key === 'has-anomaly' && view.connections.some(hasAnomaly)) ||
-        present.has(item.key as ConnectionOutcome),
-    );
-  }, [view.connections]);
+export function ConnectionList({
+  view,
+  connections,
+  filter,
+  onFilterChange,
+  activeId,
+  loadingId,
+  onOpen,
+}: Props) {
+  const available = useMemo(() => availableFilters(view.connections), [view.connections]);
 
   return (
     <div className="connection-list">
@@ -65,7 +45,7 @@ export function ConnectionList({ view, expandedId, expanded, loadingId, onToggle
               <button
                 key={item.key}
                 className={`filter ${filter === item.key ? 'active' : ''}`}
-                onClick={() => setFilter(item.key)}
+                onClick={() => onFilterChange(item.key)}
               >
                 {item.text}
               </button>
@@ -77,13 +57,10 @@ export function ConnectionList({ view, expandedId, expanded, loadingId, onToggle
               <div key={connection.id} className="row-wrap">
                 <ConnectionRow
                   connection={connection}
-                  expanded={expandedId === connection.id}
+                  active={activeId === connection.id}
                   loading={loadingId === connection.id}
-                  onToggle={() => onToggle(connection.id)}
+                  onOpen={() => onOpen(connection.id)}
                 />
-                {expandedId === connection.id && expanded && (
-                  <ConnectionDetail connection={expanded} />
-                )}
               </div>
             ))}
           </div>
@@ -91,58 +68,6 @@ export function ConnectionList({ view, expandedId, expanded, loadingId, onToggle
       )}
     </div>
   );
-}
-
-/**
- * 展开后的连接详情。
- *
- * 顺序是有讲究的：先说结论可不可信，再给 HTTP 报文（大多数人只看这个），
- * 最后才是逐包时序图。选中的包由这里持有，梯形图和报文正文共享同一个高亮状态。
- */
-function ConnectionDetail({ connection }: { connection: Connection }) {
-  const [selectedPacket, setSelectedPacket] = useState<number | null>(null);
-
-  // 换一条连接时上一条的选中项必须清掉，否则会高亮到不相干的位置
-  useEffect(() => setSelectedPacket(null), [connection.id]);
-
-  const selectedSpan = useMemo(() => {
-    if (selectedPacket === null) return null;
-    return (
-      connection.packets.find((packet) => packet.packetIndex === selectedPacket)?.appSpan ?? null
-    );
-  }, [connection.packets, selectedPacket]);
-
-  return (
-    <div className="detail">
-      <QualityNotes connection={connection} />
-
-      {connection.http ? (
-        <HttpTransactions http={connection.http} selectedSpan={selectedSpan} />
-      ) : (
-        <NonHttpNotice connection={connection} />
-      )}
-
-      <LadderDiagram
-        connection={connection}
-        selectedPacketIndex={selectedPacket}
-        onSelectPacket={setSelectedPacket}
-      />
-    </div>
-  );
-}
-
-/** 解不出报文时说清楚是为什么，而不是什么都不显示让人以为工具坏了 */
-function NonHttpNotice({ connection }: { connection: Connection }) {
-  if (connection.stats.byteCount === 0) return null;
-
-  const reason =
-    connection.appProtocol === 'tls'
-      ? '这条连接跑的是 TLS（HTTPS），内容是加密的，看不到明文报文。'
-      : !connection.quality.handshakeCaptured
-        ? '抓包开始时这条连接已经在传输中了，看不到报文的开头，无法还原应用层内容。'
-        : '没有识别出应用层协议，本工具目前只能还原明文 HTTP/1.x 的报文。';
-
-  return <div className="alert info http-none">{reason}</div>;
 }
 
 function PerspectiveBanner({ view }: { view: ConnectionsResponse }) {
@@ -172,17 +97,18 @@ function PerspectiveBanner({ view }: { view: ConnectionsResponse }) {
 
 interface RowProps {
   connection: ConnectionSummary;
-  expanded: boolean;
+  /** 刚从工作台返回时标出上次看的是哪一条 */
+  active: boolean;
   loading: boolean;
-  onToggle: () => void;
+  onOpen: () => void;
 }
 
-function ConnectionRow({ connection, expanded, loading, onToggle }: RowProps) {
+function ConnectionRow({ connection, active, loading, onOpen }: RowProps) {
   const label = outcomeLabel(connection.outcome);
 
   return (
-    <button className={`row ${expanded ? 'expanded' : ''}`} onClick={onToggle}>
-      <span className="row-caret">{loading ? '⏳' : expanded ? '▾' : '▸'}</span>
+    <button className={`row ${active ? 'active' : ''}`} onClick={onOpen}>
+      <span className="row-caret">{loading ? '⏳' : '›'}</span>
 
       <span className="row-endpoints">
         <span className="endpoint">
@@ -257,7 +183,7 @@ function renderChip(connection: ConnectionSummary) {
   const text = [summary.firstLine, outcome].filter(Boolean).join(' ');
 
   return (
-    <span className={`chip ${tone}`} title="展开可以看到完整的请求与响应报文">
+    <span className={`chip ${tone}`} title="点开可以看到完整的请求与响应报文">
       {text}
       {summary.transactionCount > 1 && ` 等 ${summary.transactionCount} 个请求`}
     </span>
@@ -290,49 +216,5 @@ function AnomalyChips({ connection }: { connection: ConnectionSummary }) {
         </span>
       ))}
     </>
-  );
-}
-
-/** 把「这条连接的结论有多可信」明确写出来，而不是让用户以为所有数字都是准的 */
-function QualityNotes({ connection }: { connection: Connection }) {
-  const notes: string[] = [];
-
-  if (!connection.quality.handshakeCaptured) {
-    notes.push('抓包开始时这条连接就已经存在，没看到握手过程。');
-  }
-  if (connection.quality.seqBaseEstimated) {
-    notes.push('序号基准是用抓到的第一个包估算的，下面带 ≈ 的相对序号只表示「相对抓包起点」，不是连接真实的起始位置。');
-  }
-  if (!connection.quality.windowScaleKnown) {
-    notes.push('窗口缩放因子在握手里协商，没抓到握手就无法换算真实窗口大小，带 ? 的窗口值仅为原始字段（零窗口的判定不受影响）。');
-  }
-  if (connection.quality.rolesInferred) {
-    notes.push('没有 SYN 可依据，客户端与服务端的角色是根据端口号推断的，有可能反了。');
-  }
-
-  if (notes.length === 0) return null;
-
-  return (
-    <div className="alert warn quality">
-      <strong>关于这条连接的可信度：</strong>
-      <ul>
-        {notes.map((note) => (
-          <li key={note}>{note}</li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function hasAnomaly(connection: ConnectionSummary): boolean {
-  const s = connection.stats;
-  return (
-    s.retransmissions +
-      s.fastRetransmissions +
-      s.suspectedOutOfOrder +
-      s.zeroWindowEvents +
-      s.duplicateAcks +
-      s.lostSegments >
-    0
   );
 }

@@ -8,7 +8,7 @@ import type {
 } from '@tcpview/core';
 import { anomalyLabel, formatDuration } from '@tcpview/core';
 
-const HEADER_HEIGHT = 56;
+const HEADER_HEIGHT = 52;
 // 人话注解是这个工具的核心价值，布局优先保证它完整可见。
 // 实测最长注解约 410px、最长序号行约 321px，下面的取值使两者都有余量。
 const LEFT_LANE = 140;
@@ -30,6 +30,10 @@ interface Props {
  *
  * 报文正文不在这里渲染：SVG 没有文本流式布局，换行要自己算。
  * 这里只负责标出「这个包承载了报文的哪一段」，正文由 HttpTransactions 用 HTML 渲染。
+ *
+ * 泳道表头是独立的一张 SVG 并吸顶：工作台里这一栏能滚几千像素，
+ * 表头跟着滚走的话，滚到中段就不知道左右两条生命线各是谁了。
+ * 吸顶元素只锁纵向，横向仍跟着内容走，所以表头始终对齐在生命线正上方。
  */
 export function LadderDiagram({ connection, selectedPacketIndex, onSelectPacket }: Props) {
   // 有应用层注解时每行要多放一行字，行高与注解起始位置都跟着变
@@ -38,33 +42,41 @@ export function LadderDiagram({ connection, selectedPacketIndex, onSelectPacket 
   const noteX = hasAppLayer ? BADGE_X + BADGE_WIDTH + 10 : RIGHT_LANE + 38;
   const canvasWidth = noteX + 570;
 
-  const height = HEADER_HEIGHT + connection.packets.length * rowHeight + 30;
+  const bodyHeight = connection.packets.length * rowHeight + 16;
 
   return (
     <div className="ladder">
-      <svg width={canvasWidth} height={height} role="img" aria-label="TCP 时序图">
-        {/* 两侧的生命线 */}
-        <line x1={LEFT_LANE} y1={HEADER_HEIGHT - 18} x2={LEFT_LANE} y2={height - 16} className="lifeline" />
-        <line x1={RIGHT_LANE} y1={HEADER_HEIGHT - 18} x2={RIGHT_LANE} y2={height - 16} className="lifeline" />
+      <div className="ladder-head" style={{ width: canvasWidth }}>
+        <svg width={canvasWidth} height={HEADER_HEIGHT} role="presentation">
+          <text x={LEFT_LANE} y={20} className="lane-title" textAnchor="middle">
+            客户端
+          </text>
+          <text x={LEFT_LANE} y={38} className="lane-sub" textAnchor="middle">
+            {connection.clientAddr}:{connection.clientPort}
+          </text>
+          <text x={RIGHT_LANE} y={20} className="lane-title" textAnchor="middle">
+            服务端
+          </text>
+          <text x={RIGHT_LANE} y={38} className="lane-sub" textAnchor="middle">
+            {connection.serverAddr}:{connection.serverPort}
+          </text>
 
-        <text x={LEFT_LANE} y={22} className="lane-title" textAnchor="middle">
-          客户端
-        </text>
-        <text x={LEFT_LANE} y={40} className="lane-sub" textAnchor="middle">
-          {connection.clientAddr}:{connection.clientPort}
-        </text>
-        <text x={RIGHT_LANE} y={22} className="lane-title" textAnchor="middle">
-          服务端
-        </text>
-        <text x={RIGHT_LANE} y={40} className="lane-sub" textAnchor="middle">
-          {connection.serverAddr}:{connection.serverPort}
-        </text>
+          {/* 生命线在表头里探出一小截，和下面的正文接上 */}
+          <line x1={LEFT_LANE} y1={42} x2={LEFT_LANE} y2={HEADER_HEIGHT} className="lifeline" />
+          <line x1={RIGHT_LANE} y1={42} x2={RIGHT_LANE} y2={HEADER_HEIGHT} className="lifeline" />
+        </svg>
+      </div>
+
+      <svg width={canvasWidth} height={bodyHeight} role="img" aria-label="TCP 时序图">
+        {/* 两侧的生命线 */}
+        <line x1={LEFT_LANE} y1={0} x2={LEFT_LANE} y2={bodyHeight - 8} className="lifeline" />
+        <line x1={RIGHT_LANE} y1={0} x2={RIGHT_LANE} y2={bodyHeight - 8} className="lifeline" />
 
         {connection.packets.map((packet, index) => (
           <PacketRow
             key={`${packet.packetIndex}-${index}`}
             packet={packet}
-            y={HEADER_HEIGHT + index * rowHeight}
+            y={index * rowHeight + rowHeight / 2}
             rowHeight={rowHeight}
             noteX={noteX}
             canvasWidth={canvasWidth}

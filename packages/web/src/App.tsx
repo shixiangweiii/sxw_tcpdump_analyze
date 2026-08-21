@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Connection } from '@tcpview/core';
 import { formatBytes, formatDuration } from '@tcpview/core';
 import {
@@ -8,18 +8,34 @@ import {
   type ConnectionsResponse,
   type UploadResponse,
 } from './api';
+import { applyFilter, type Filter } from './connection-filter';
 import { UploadView } from './components/UploadView';
 import { HostPicker } from './components/HostPicker';
 import { ConnectionList } from './components/ConnectionList';
+import { ConnectionWorkbench } from './components/ConnectionWorkbench';
 
 export function App() {
   const [session, setSession] = useState<UploadResponse | null>(null);
   const [view, setView] = useState<ConnectionsResponse | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<Connection | null>(null);
+  const [filter, setFilter] = useState<Filter>('all');
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [active, setActive] = useState<Connection | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 工作台是整页视图，进去时列表的滚动位置会丢。退出来还得让人接着刚才那一行看
+  const listScroll = useRef<number | null>(null);
+
+  const connections = useMemo(
+    () => (view ? applyFilter(view.connections, filter) : []),
+    [view, filter],
+  );
+
+  const activeIndex = useMemo(
+    () => connections.findIndex((connection) => connection.id === activeId),
+    [connections, activeId],
+  );
 
   const handleFile = useCallback(async (file: File) => {
     setBusy(true);
@@ -28,8 +44,9 @@ export function App() {
       const response = await uploadCapture(file);
       setSession(response);
       setView(null);
-      setExpandedId(null);
-      setExpanded(null);
+      setFilter('all');
+      setActiveId(null);
+      setActive(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : '上传失败');
     } finally {
@@ -44,8 +61,9 @@ export function App() {
       setError(null);
       try {
         setView(await fetchConnections(session.sessionId, host));
-        setExpandedId(null);
-        setExpanded(null);
+        setFilter('all');
+        setActiveId(null);
+        setActive(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : '查询失败');
       } finally {
@@ -55,31 +73,70 @@ export function App() {
     [session],
   );
 
-  const handleToggle = useCallback(
+  const open = useCallback(
     async (connectionId: string) => {
       if (!session) return;
-      if (expandedId === connectionId) {
-        setExpandedId(null);
-        setExpanded(null);
-        return;
-      }
-
       setLoadingId(connectionId);
       try {
         const connection = await fetchConnection(session.sessionId, connectionId);
-        setExpandedId(connectionId);
-        setExpanded(connection);
+        setActiveId(connectionId);
+        setActive(connection);
+        setError(null);
       } catch (err) {
+        // 加载失败时停在原地：已经在工作台里的话，保住当前这条，不要把人踢回列表
         setError(err instanceof Error ? err.message : '加载连接详情失败');
       } finally {
         setLoadingId(null);
       }
     },
-    [session, expandedId],
+    [session],
   );
+
+  const handleOpen = useCallback(
+    (connectionId: string) => {
+      listScroll.current = window.scrollY;
+      void open(connectionId);
+    },
+    [open],
+  );
+
+  const handleNavigate = useCallback(
+    (delta: number) => {
+      const next = connections[activeIndex + delta];
+      if (next) void open(next.id);
+    },
+    [connections, activeIndex, open],
+  );
+
+  // 只丢掉已加载的详情，activeId 留着——列表靠它标出「刚才看的是这条」
+  const handleClose = useCallback(() => {
+    setActive(null);
+    setError(null);
+  }, []);
+
+  // 回到列表后再恢复滚动位置——要等列表重新挂载出高度，所以放在 layout effect 里
+  useLayoutEffect(() => {
+    if (active === null && listScroll.current !== null) {
+      window.scrollTo(0, listScroll.current);
+      listScroll.current = null;
+    }
+  }, [active]);
 
   if (!session) {
     return <UploadView onFile={handleFile} busy={busy} error={error} />;
+  }
+
+  if (activeId && active) {
+    return (
+      <ConnectionWorkbench
+        connection={active}
+        position={{ index: activeIndex, total: connections.length }}
+        loading={loadingId !== null}
+        error={error}
+        onNavigate={handleNavigate}
+        onClose={handleClose}
+      />
+    );
   }
 
   return (
@@ -116,8 +173,9 @@ export function App() {
             className="link"
             onClick={() => {
               setView(null);
-              setExpandedId(null);
-              setExpanded(null);
+              setFilter('all');
+              setActiveId(null);
+              setActive(null);
             }}
           >
             重选 host
@@ -151,10 +209,12 @@ export function App() {
       ) : (
         <ConnectionList
           view={view}
-          expandedId={expandedId}
-          expanded={expanded}
+          connections={connections}
+          filter={filter}
+          onFilterChange={setFilter}
+          activeId={activeId}
           loadingId={loadingId}
-          onToggle={handleToggle}
+          onOpen={handleOpen}
         />
       )}
     </div>
