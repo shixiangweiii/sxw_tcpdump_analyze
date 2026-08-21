@@ -20,7 +20,8 @@ dist/
 # 合成夹具由 npm run fixtures 生成，不入库
 packages/core/fixtures/
 
+# 已确认项目中放的都是不含敏感数据可直接提交
 # 用户自己的抓包文件不应该被误提交（可能含敏感流量）
-*.pcap
-*.pcapng
-*.cap
+# *.pcap
+# *.pcapng
+# *.cap
