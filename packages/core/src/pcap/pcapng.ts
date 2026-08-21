@@ -10,6 +10,8 @@ interface InterfaceDescription {
   linkType: number;
   /** if_tsresol 原始值，默认 6（微秒） */
   tsResolution: number;
+  /** if_name，例如 en0 / utun4。抓包接口决定了 DLT_NULL 到底是回环还是隧道 */
+  name?: string;
 }
 
 /** 判断是否为 pcapng：第一个 block 必须是 SHB */
@@ -26,6 +28,7 @@ export function sniffPcapng(bytes: Uint8Array): boolean {
 export class PcapngReader {
   truncated = false;
   private readonly seenLinkTypes = new Set<number>();
+  private readonly seenInterfaceNames = new Set<string>();
 
   constructor(private readonly bytes: Uint8Array) {
     if (!sniffPcapng(bytes)) {
@@ -35,6 +38,10 @@ export class PcapngReader {
 
   get linkTypes(): number[] {
     return [...this.seenLinkTypes];
+  }
+
+  get interfaceNames(): string[] {
+    return [...this.seenInterfaceNames];
   }
 
   *packets(): Generator<RawPacket> {
@@ -103,7 +110,12 @@ export class PcapngReader {
     reader.u32(); // snaplen
 
     let tsResolution = 6;
+    let name: string | undefined;
     for (const option of this.readOptions(reader)) {
+      // if_name
+      if (option.code === 2 && option.value.length > 0) {
+        name = latin1(option.value);
+      }
       // if_tsresol
       if (option.code === 9 && option.value.length >= 1) {
         tsResolution = option.value[0] ?? 6;
@@ -111,7 +123,8 @@ export class PcapngReader {
     }
 
     this.seenLinkTypes.add(linkType);
-    return { linkType, tsResolution };
+    if (name) this.seenInterfaceNames.add(name);
+    return { linkType, tsResolution, name };
   }
 
   private parseEnhancedPacket(
@@ -183,4 +196,14 @@ function toMicros(high: number, low: number, tsResolution: number): number {
 
   const exp = BigInt(tsResolution & 0x7f);
   return Number((raw * 1_000_000n) >> exp);
+}
+
+/** option 里的字符串按 UTF-8 存，但接口名实际只用 ASCII；尾部可能带 NUL 填充 */
+function latin1(value: Uint8Array): string {
+  let out = '';
+  for (const byte of value) {
+    if (byte === 0) break;
+    out += String.fromCharCode(byte);
+  }
+  return out;
 }

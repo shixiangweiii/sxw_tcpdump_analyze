@@ -54,6 +54,29 @@ describe('链路层', () => {
     expect(connection.serverPort).toBe(443);
     expect(connection.quality.handshakeCaptured).toBe(true);
   });
+
+  it('DLT_NULL（macOS tcpdump -i any 走 utun 隧道）', () => {
+    const result = analyze(scenarios.macosTunnelCapture());
+    const connection = only(result.connections);
+
+    expect(result.capture.format).toBe('pcapng');
+    expect(result.capture.linkTypes).toEqual([0]);
+    // DLT_NULL 不等于本机回环，文案不能这么写
+    expect(result.capture.linkTypeNames[0]).not.toContain('本机回环');
+    // 接口名是唯一能区分「回环还是隧道」的线索，必须透传出来
+    expect(result.capture.interfaceNames).toEqual(['utun4']);
+
+    expect(connection.outcome).toBe('established-closed');
+    expect(connection.clientAddr).toBe('198.18.0.1');
+    expect(connection.serverAddr).toBe('198.18.0.141');
+    expect(connection.quality.handshakeCaptured).toBe(true);
+    expect(connection.quality.rolesInferred).toBe(false);
+  });
+
+  it('经典 pcap 没有接口名，返回空数组而不是编造', () => {
+    const result = analyze(scenarios.normalConnection({ format: 'pcap' }));
+    expect(result.capture.interfaceNames).toEqual([]);
+  });
 });
 
 describe('连接终态判定', () => {
@@ -197,6 +220,24 @@ describe('异常检测', () => {
     // 客户端通告缩放 7，窗口字段 512 → 真实窗口 65536
     expect(handshakeAck?.window).toBe(512);
     expect(handshakeAck?.scaledWindow).toBe(65_536);
+  });
+
+  it('只有一方声明窗口缩放时按不缩放处理，且不算未知', () => {
+    const connection = only(analyze(scenarios.macosTunnelCapture()).connections);
+
+    // 客户端 SYN 带 WS=6、服务端 SYN-ACK 不带：RFC 7323 规定此时双方都不缩放。
+    // 这是「确知不缩放」而非「无从判断」，所以不该给用户挂可信度告警。
+    expect(connection.quality.windowScaleKnown).toBe(true);
+    for (const packet of connection.packets) {
+      expect(packet.scaledWindow).toBe(packet.window);
+    }
+  });
+
+  it('干净抓包不得报出任何异常', () => {
+    const connection = only(analyze(scenarios.macosTunnelCapture()).connections);
+
+    // 带 ECE/CWR 的 SYN、超 MSS 的整段数据、FIN 占序号，都不该被误判
+    expect(anomalyKinds(connection)).toEqual([]);
   });
 });
 

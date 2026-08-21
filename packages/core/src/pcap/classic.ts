@@ -65,6 +65,11 @@ export class ClassicPcapReader {
     return [this.header.linkType];
   }
 
+  /** 经典 pcap 的全局头里没有接口名字段 */
+  get interfaceNames(): string[] {
+    return [];
+  }
+
   *packets(): Generator<RawPacket> {
     const { littleEndian, nanoseconds, linkType } = this.header;
     const reader = new ByteReader(this.bytes, littleEndian);

@@ -10,11 +10,13 @@ export const LinkType = {
 } as const;
 
 const LINK_TYPE_NAMES: Record<number, string> = {
-  [LinkType.NULL]: 'NULL（本机回环）',
+  // DLT_NULL 在 BSD/macOS 上不只用于 lo0：utun（VPN）、gif、ppp 等隧道接口同样用它，
+  // 所以不能断言「本机回环」——具体是哪个接口看 pcapng 的 if_name。
+  [LinkType.NULL]: 'NULL（BSD 地址族封装，回环或 utun 隧道）',
   [LinkType.ETHERNET]: 'EN10MB（以太网）',
   [LinkType.RAW_BSD]: 'RAW（裸 IP）',
   [LinkType.RAW]: 'RAW（裸 IP）',
-  [LinkType.LOOP]: 'LOOP（本机回环）',
+  [LinkType.LOOP]: 'LOOP（BSD 回环封装）',
   [LinkType.LINUX_SLL]: 'LINUX_SLL（tcpdump -i any）',
   [LinkType.LINUX_SLL2]: 'LINUX_SLL2（tcpdump -i any，新版）',
 };

@@ -122,11 +122,13 @@ export function analyze(bytes: Uint8Array, options: AnalyzeOptions = {}): Analys
     );
   }
 
+  // linkTypes / interfaceNames 对 pcapng 而言要迭代完所有 block 才完整，必须在循环之后取
   const linkTypes = capture.linkTypes;
   const captureInfo: CaptureInfo = {
     format: capture.format,
     linkTypes,
     linkTypeNames: linkTypes.map(linkTypeName),
+    interfaceNames: capture.interfaceNames,
     packetCount,
     decodedPackets,
     firstTsMicros,

@@ -236,6 +236,8 @@ export interface CaptureInfo {
   format: CaptureFormat;
   linkTypes: number[];
   linkTypeNames: string[];
+  /** 抓包接口名（如 en0 / utun4）。仅 pcapng 携带，经典 pcap 为空数组 */
+  interfaceNames: string[];
   packetCount: number;
   /** 成功解码到 IP 层的包数 */
   decodedPackets: number;

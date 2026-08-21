@@ -729,6 +729,158 @@ function handshake(b: PcapBuilder, t: (offset: number) => number): void {
   });
 }
 
+/**
+ * macOS `tcpdump -i any host <域名>` 的真实形态。
+ *
+ * Apple 的 tcpdump 写出的是 pcapng，并按真实抓包接口建 IDB——流量走 VPN / 代理时
+ * 接口是 utun，链路类型为 DLT_NULL。这与「本机回环」无关，因此必须靠 if_name 区分。
+ *
+ * 另两个现实细节一并复刻：
+ *  - macOS 的 SYN 会带 ECE + CWR（ECN 商议），不能影响握手识别
+ *  - 服务端 SYN-ACK 不回 Window Scale，此时双方都不缩放（而不是「未知」）
+ */
+export function macosTunnelCapture(): Uint8Array {
+  const b = new PcapBuilder({
+    format: 'pcapng',
+    linkType: LinkType.NULL,
+    interfaceName: 'utun4',
+  });
+  const t = (offset: number) => BASE_TS + offset;
+
+  const client = '198.18.0.1';
+  const server = '198.18.0.141';
+  const clientPort = 55_708;
+  const clientIsn = 3_000_000;
+  const serverIsn = 7_000_000;
+
+  // 长度一律从实际编码算，避免手写常量把序号对不上
+  const clientHello = buildClientHello('www.yuhang.gov.cn');
+  const serverFlight = new Uint8Array(1200).fill(0x17);
+  const clientAppData = new Uint8Array(31).fill(0x17);
+
+  b.tcp({
+    tsMicros: t(0),
+    src: client,
+    srcPort: clientPort,
+    dst: server,
+    dstPort: SERVER_PORT,
+    seq: clientIsn,
+    flags: ['SYN', 'ECE', 'CWR'],
+    window: 65535,
+    options: { mss: 4024, sackPermitted: true, windowScale: 6 },
+  });
+  b.tcp({
+    tsMicros: t(124),
+    src: server,
+    srcPort: SERVER_PORT,
+    dst: client,
+    dstPort: clientPort,
+    seq: serverIsn,
+    ack: clientIsn + 1,
+    flags: ['SYN', 'ACK'],
+    window: 65535,
+    // 注意：没有 windowScale
+    options: { mss: 4004 },
+  });
+  b.tcp({
+    tsMicros: t(189),
+    src: client,
+    srcPort: clientPort,
+    dst: server,
+    dstPort: SERVER_PORT,
+    seq: clientIsn + 1,
+    ack: serverIsn + 1,
+    flags: ['ACK'],
+    window: 65535,
+  });
+  b.tcp({
+    tsMicros: t(12_328),
+    src: client,
+    srcPort: clientPort,
+    dst: server,
+    dstPort: SERVER_PORT,
+    seq: clientIsn + 1,
+    ack: serverIsn + 1,
+    flags: ['PSH', 'ACK'],
+    window: 65535,
+    payload: clientHello,
+  });
+  b.tcp({
+    tsMicros: t(44_888),
+    src: server,
+    srcPort: SERVER_PORT,
+    dst: client,
+    dstPort: clientPort,
+    seq: serverIsn + 1,
+    ack: clientIsn + 1 + clientHello.length,
+    flags: ['ACK'],
+    window: 65208,
+    payload: serverFlight,
+  });
+  b.tcp({
+    tsMicros: t(45_020),
+    src: client,
+    srcPort: clientPort,
+    dst: server,
+    dstPort: SERVER_PORT,
+    seq: clientIsn + 1 + clientHello.length,
+    ack: serverIsn + 1 + serverFlight.length,
+    flags: ['ACK'],
+    window: 65535,
+  });
+  b.tcp({
+    tsMicros: t(107_970),
+    src: client,
+    srcPort: clientPort,
+    dst: server,
+    dstPort: SERVER_PORT,
+    seq: clientIsn + 1 + clientHello.length,
+    ack: serverIsn + 1 + serverFlight.length,
+    flags: ['PSH', 'ACK'],
+    window: 65535,
+    payload: clientAppData,
+  });
+
+  const clientFinSeq = clientIsn + 1 + clientHello.length + clientAppData.length;
+  const serverFinSeq = serverIsn + 1 + serverFlight.length;
+
+  b.tcp({
+    tsMicros: t(113_473),
+    src: client,
+    srcPort: clientPort,
+    dst: server,
+    dstPort: SERVER_PORT,
+    seq: clientFinSeq,
+    ack: serverFinSeq,
+    flags: ['FIN', 'ACK'],
+    window: 65535,
+  });
+  b.tcp({
+    tsMicros: t(113_667),
+    src: server,
+    srcPort: SERVER_PORT,
+    dst: client,
+    dstPort: clientPort,
+    seq: serverFinSeq,
+    ack: clientFinSeq + 1,
+    flags: ['FIN', 'ACK'],
+    window: 64974,
+  });
+  b.tcp({
+    tsMicros: t(113_798),
+    src: client,
+    srcPort: clientPort,
+    dst: server,
+    dstPort: SERVER_PORT,
+    seq: clientFinSeq + 1,
+    ack: serverFinSeq + 1,
+    flags: ['ACK'],
+    window: 65535,
+  });
+
+  return b.build();
+}
+
 /** 构造一个含 CNAME 链的 DNS 应答 */
 function buildDnsResponse(question: string, cnames: string[], addresses: string[]): Uint8Array {
   const parts: number[] = [];
@@ -827,4 +979,5 @@ export const scenarios = {
   dnsAndSni,
   linuxCookedCapture,
   vlanTagged,
+  macosTunnelCapture,
 };

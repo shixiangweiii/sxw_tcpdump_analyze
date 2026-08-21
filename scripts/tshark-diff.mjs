@@ -13,6 +13,8 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const FIXTURE_DIR = join(import.meta.dirname, '../packages/core/fixtures');
+/** 真实抓包夹具。合成夹具只能验证「我们以为现实长什么样」，真实文件才校得出偏差 */
+const TESTDATA_DIR = join(import.meta.dirname, '../packages/core/testdata');
 const CORE_ENTRY = join(import.meta.dirname, '../packages/core/dist/index.js');
 
 /** 我方异常种类 → tshark 字段。keep-alive 与 window-update 不参与对账 */
@@ -41,7 +43,7 @@ if (!existsSync(CORE_ENTRY)) {
   process.exit(1);
 }
 
-if (!existsSync(FIXTURE_DIR)) {
+if (!existsSync(FIXTURE_DIR) && !existsSync(TESTDATA_DIR)) {
   console.error('✗ 未找到夹具目录，请先执行：npm run fixtures');
   process.exit(1);
 }
@@ -83,14 +85,31 @@ function collectOurs(result) {
   return perPacket;
 }
 
-const files = readdirSync(FIXTURE_DIR).filter((name) => name.endsWith('.pcap')).sort();
+/** 合成夹具与真实抓包一并对账；真实文件加前缀标出来，差异归因时能立刻分辨 */
+function collectCaptures() {
+  const captures = [];
+  for (const [dir, label] of [
+    [FIXTURE_DIR, ''],
+    [TESTDATA_DIR, '真实抓包 '],
+  ]) {
+    if (!existsSync(dir)) continue;
+    const names = readdirSync(dir)
+      .filter((name) => name.endsWith('.pcap') || name.endsWith('.pcapng'))
+      .sort();
+    for (const name of names) {
+      captures.push({ label: `${label}${name}`, path: join(dir, name) });
+    }
+  }
+  return captures;
+}
+
+const captures = collectCaptures();
 let totalMismatches = 0;
 let totalPackets = 0;
 
-console.log(`对账 ${files.length} 个夹具（基准：tshark）\n`);
+console.log(`对账 ${captures.length} 个抓包文件（基准：tshark）\n`);
 
-for (const name of files) {
-  const path = join(FIXTURE_DIR, name);
+for (const { label, path } of captures) {
   const ours = collectOurs(analyze(new Uint8Array(readFileSync(path))));
   const theirs = runTshark(path);
 
@@ -115,10 +134,10 @@ for (const name of files) {
   }
 
   if (rows.length === 0) {
-    console.log(`  ✓ ${name}`);
+    console.log(`  ✓ ${label}`);
   } else {
     totalMismatches += rows.length;
-    console.log(`  ✗ ${name}  ${rows.length} 处差异`);
+    console.log(`  ✗ ${label}  ${rows.length} 处差异`);
     for (const row of rows) console.log(row);
   }
 }

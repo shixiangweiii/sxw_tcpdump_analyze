@@ -101,6 +101,11 @@ export function App() {
           <span>{formatBytes(session.fileSize)}</span>
           <span>{session.capture.format.toUpperCase()}</span>
           <span>{session.capture.linkTypeNames.join('、')}</span>
+          {session.capture.interfaceNames.length > 0 && (
+            <span title="抓包所在的网卡。utun 开头说明流量走的是 VPN / 代理隧道">
+              接口 {session.capture.interfaceNames.join('、')}
+            </span>
+          )}
           <span>{session.capture.packetCount} 个包</span>
           <span>{session.connectionCount} 条 TCP 连接</span>
           <span>历时 {formatDuration(session.capture.durationMicros)}</span>

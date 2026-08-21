@@ -6,6 +6,8 @@ export interface CaptureReader {
   format: CaptureFormat;
   /** 已观察到的链路类型。pcapng 可能有多个接口，需要迭代后才完整 */
   readonly linkTypes: number[];
+  /** 抓包接口名。仅 pcapng 的 IDB 携带该信息，经典 pcap 恒为空 */
+  readonly interfaceNames: string[];
   /** 迭代过程中发现文件被截断时置位 */
   readonly truncated: boolean;
   packets(): Generator<RawPacket>;
@@ -23,6 +25,9 @@ export function openCapture(bytes: Uint8Array): CaptureReader {
       get linkTypes() {
         return reader.linkTypes;
       },
+      get interfaceNames() {
+        return reader.interfaceNames;
+      },
       get truncated() {
         return reader.truncated;
       },
@@ -36,6 +41,9 @@ export function openCapture(bytes: Uint8Array): CaptureReader {
       format: 'pcap',
       get linkTypes() {
         return reader.linkTypes;
+      },
+      get interfaceNames() {
+        return reader.interfaceNames;
       },
       get truncated() {
         return reader.truncated;

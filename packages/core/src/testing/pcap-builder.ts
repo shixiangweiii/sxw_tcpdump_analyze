@@ -48,6 +48,8 @@ export interface UdpPacketSpec {
 export interface BuilderOptions {
   linkType?: number;
   format?: 'pcap' | 'pcapng';
+  /** pcapng 的 IDB 里写 if_name（例如 utun4）。经典 pcap 无此字段，传了也不生效 */
+  interfaceName?: string;
 }
 
 interface Frame {
@@ -66,10 +68,12 @@ export class PcapBuilder {
   private readonly frames: Frame[] = [];
   private readonly linkType: number;
   private readonly format: 'pcap' | 'pcapng';
+  private readonly interfaceName: string | undefined;
 
   constructor(options: BuilderOptions = {}) {
     this.linkType = options.linkType ?? LinkType.ETHERNET;
     this.format = options.format ?? 'pcap';
+    this.interfaceName = options.interfaceName;
   }
 
   tcp(spec: TcpPacketSpec): this {
@@ -226,14 +230,31 @@ export class PcapBuilder {
     blocks.push(shb);
 
     // Interface Description Block
-    const idb = new Uint8Array(20);
+    // 带 if_name 时要追加 option：code(2)+len(2)+value（补齐到 4 字节）+ opt_endofopt
+    const nameBytes = this.interfaceName
+      ? new TextEncoder().encode(this.interfaceName)
+      : null;
+    const optionsLength = nameBytes
+      ? 4 + Math.ceil(nameBytes.length / 4) * 4 + 4
+      : 0;
+    const idbLength = 20 + optionsLength;
+
+    const idb = new Uint8Array(idbLength);
     const idbView = new DataView(idb.buffer);
     idbView.setUint32(0, 0x00000001, true);
-    idbView.setUint32(4, 20, true);
+    idbView.setUint32(4, idbLength, true);
     idbView.setUint16(8, this.linkType, true);
     idbView.setUint16(10, 0, true);
     idbView.setUint32(12, 262144, true);
-    idbView.setUint32(16, 20, true);
+    if (nameBytes) {
+      idbView.setUint16(16, 2, true); // if_name
+      idbView.setUint16(18, nameBytes.length, true);
+      idb.set(nameBytes, 20);
+      // 尾部 opt_endofopt（code 0, len 0），位置在总长字段之前
+      idbView.setUint16(idbLength - 8, 0, true);
+      idbView.setUint16(idbLength - 6, 0, true);
+    }
+    idbView.setUint32(idbLength - 4, idbLength, true);
     blocks.push(idb);
 
     for (const frame of this.frames) {
