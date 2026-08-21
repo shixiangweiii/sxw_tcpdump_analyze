@@ -411,7 +411,9 @@ pre {
 
 .row {
   display: grid;
-  grid-template-columns: 24px minmax(320px, 1fr) auto auto auto;
+  /* 依次是：折叠箭头 / 端点 / 结论徽章 / 应用层摘要 / 统计 / 异常芯片。
+     列数必须和 ConnectionRow 的子元素个数对上，少一列异常芯片就会掉到下一行去 */
+  grid-template-columns: 24px minmax(260px, 1fr) auto auto auto auto;
   align-items: center;
   gap: 16px;
   width: 100%;
@@ -460,6 +462,18 @@ pre {
   gap: 6px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.row-app {
+  display: flex;
+  justify-content: flex-end;
+  max-width: 260px;
+}
+
+.row-app .chip {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--mono);
 }
 
 .detail {
@@ -576,4 +590,241 @@ pre {
   fill: #5b6479;
   font-size: 10.5px;
   font-family: var(--mono);
+}
+
+/* ---------------------------------------------------------------- 梯形图的应用层标注 */
+
+/* 整行的点击热区。默认透明，只有承载了报文的行才响应点击 */
+.row-hit {
+  fill: transparent;
+}
+
+.row-hit.clickable {
+  cursor: pointer;
+}
+
+.row-hit.clickable:hover {
+  fill: rgba(90, 162, 255, 0.06);
+}
+
+.row-hit.selected {
+  fill: rgba(90, 162, 255, 0.14);
+}
+
+.app-note {
+  fill: #8fa6c8;
+  font-size: 11.5px;
+}
+
+.app-note.start {
+  fill: var(--accent);
+}
+
+.app-note.dup {
+  fill: var(--warn);
+}
+
+.app-badge-box {
+  fill: var(--panel-2);
+  stroke: var(--border);
+}
+
+.app-badge-box.start {
+  fill: rgba(90, 162, 255, 0.16);
+  stroke: rgba(90, 162, 255, 0.4);
+}
+
+.app-badge-box.dup {
+  fill: rgba(232, 176, 75, 0.14);
+  stroke: rgba(232, 176, 75, 0.35);
+}
+
+.app-badge-text {
+  fill: var(--muted);
+  font-size: 11px;
+  font-family: var(--mono);
+}
+
+.app-badge-text.start {
+  fill: var(--accent);
+  font-weight: 600;
+}
+
+.app-badge-text.dup {
+  fill: var(--warn);
+}
+
+/* ---------------------------------------------------------------- HTTP 事务 */
+
+.http-transactions {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.http-none {
+  margin-bottom: 16px;
+}
+
+.http-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.http-card-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.http-index {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.http-note {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* 耗时分解条：把网络往返和服务端处理用颜色分开 */
+.http-timing {
+  margin-bottom: 14px;
+}
+
+.http-timing-bar {
+  display: flex;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--panel-2);
+}
+
+.http-timing-seg.net {
+  background: #46557a;
+}
+
+.http-timing-seg.server {
+  background: var(--accent);
+}
+
+.http-timing-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.http-timing-key::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 5px;
+}
+
+.http-timing-key.net::before {
+  background: #46557a;
+}
+
+.http-timing-key.server::before {
+  background: var(--accent);
+}
+
+.http-message {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  margin-top: 12px;
+}
+
+.http-message.empty {
+  color: var(--muted);
+}
+
+.http-start-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.http-dir {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.http-start-line code {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.http-incomplete {
+  margin: 8px 0;
+}
+
+.http-headers {
+  margin: 0 0 10px;
+  display: grid;
+  grid-template-columns: minmax(120px, max-content) 1fr;
+  gap: 2px 14px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.http-header-row {
+  display: contents;
+}
+
+.http-headers dt {
+  color: var(--muted);
+}
+
+.http-headers dd {
+  margin: 0;
+  color: #cdd6e6;
+  word-break: break-all;
+}
+
+.http-body-meta {
+  color: var(--muted);
+  font-size: 11.5px;
+  margin-bottom: 6px;
+}
+
+.http-body-unavailable {
+  font-size: 12.5px;
+}
+
+.http-body-text {
+  margin: 0;
+  max-height: 420px;
+  overflow: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.55;
+  color: #cdd6e6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 点梯形图某一行时，它承载的那段正文在这里高亮 */
+.http-span-highlight {
+  background: rgba(90, 162, 255, 0.28);
+  color: var(--text);
+  border-radius: 2px;
 }

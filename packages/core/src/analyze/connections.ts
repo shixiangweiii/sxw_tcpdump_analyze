@@ -1,15 +1,45 @@
 import type {
+  AppProtocol,
   Connection,
   ConnectionOutcome,
   ConnectionPacket,
   ClosureReason,
   Direction,
+  HttpAnalysis,
+  HttpSummary,
   NetworkInfo,
   TcpInfo,
 } from '../types.js';
 import { flagNames } from '../decode/transport.js';
+import { sniffAppProtocol } from '../decode/http.js';
 import { createDirectionState, detectAnomalies, type DirectionState } from './anomaly.js';
+import { analyzeHttp } from './http-analysis.js';
+import type { StreamSegment } from './reassemble.js';
 import { describePacket } from './notes.js';
+
+/**
+ * 还没认出协议之前，每个方向最多先缓存这么多字节。
+ *
+ * 不能只看每个方向第一个到达的数据包：真实抓包里服务端先到的是流的第 4195 字节，
+ * HTTP 响应头在第 3 个到达的包里。这个预算就是给乱序留的兜底。
+ */
+const SNIFF_BUDGET = 32 * 1024;
+
+/** 认定是 HTTP 之后，每条连接最多保留这么多载荷 */
+const HTTP_RETAIN_CAP = 1024 * 1024;
+
+/** 连接上的载荷缓存。只对可能是 HTTP 的连接保留，其余即用即弃 */
+interface AppCapture {
+  protocol: AppProtocol;
+  /** 已经下过结论，不用再嗅探 */
+  decided: boolean;
+  client: StreamSegment[];
+  server: StreamSegment[];
+  clientSniffBudget: number;
+  serverSniffBudget: number;
+  retainedBytes: number;
+  capped: boolean;
+}
 
 interface MutableConnection {
   key: string;
@@ -39,6 +69,7 @@ interface MutableConnection {
   packets: ConnectionPacket[];
   /** 双方都完成挥手或出现 RST 后置位，用于识别端口复用 */
   closed: boolean;
+  appCapture: AppCapture;
 }
 
 /**
@@ -50,7 +81,13 @@ export class ConnectionTracker {
   private readonly finished: MutableConnection[] = [];
   private readonly generations = new Map<string, number>();
 
-  add(packetIndex: number, tsMicros: number, network: NetworkInfo, tcp: TcpInfo): void {
+  add(
+    packetIndex: number,
+    tsMicros: number,
+    network: NetworkInfo,
+    tcp: TcpInfo,
+    payload?: Uint8Array,
+  ): void {
     const key = canonicalKey(network.src, tcp.srcPort, network.dst, tcp.dstPort);
     const isPureSyn = tcp.flags.syn && !tcp.flags.ack;
 
@@ -74,7 +111,7 @@ export class ConnectionTracker {
       this.active.set(key, connection);
     }
 
-    this.append(connection, packetIndex, tsMicros, network, tcp);
+    this.append(connection, packetIndex, tsMicros, network, tcp, payload);
   }
 
   finish(): Connection[] {
@@ -122,6 +159,16 @@ export class ConnectionTracker {
       lastTsMicros: tsMicros,
       packets: [],
       closed: false,
+      appCapture: {
+        protocol: 'unknown',
+        decided: false,
+        client: [],
+        server: [],
+        clientSniffBudget: SNIFF_BUDGET,
+        serverSniffBudget: SNIFF_BUDGET,
+        retainedBytes: 0,
+        capped: false,
+      },
     };
   }
 
@@ -131,6 +178,7 @@ export class ConnectionTracker {
     tsMicros: number,
     network: NetworkInfo,
     tcp: TcpInfo,
+    payload?: Uint8Array,
   ): void {
     const direction: Direction =
       network.src === connection.clientAddr && tcp.srcPort === connection.clientPort
@@ -197,6 +245,10 @@ export class ConnectionTracker {
     // ---- 异常检测 ----
     const anomalies = detectAnomalies({ tcp, tsMicros, relSeq, relAck, self, peer });
 
+    if (payload && payload.length > 0) {
+      retainPayload(connection.appCapture, direction, relSeq, payload, packetIndex, tsMicros);
+    }
+
     const previous = connection.packets[connection.packets.length - 1];
     const scale = effectiveWindowScale(self, peer);
 
@@ -224,10 +276,80 @@ export class ConnectionTracker {
         isHandshakeAck,
         established: wasEstablished,
       }),
+      // 应用层视角要等流重组完才知道，先占位，materialize 时回填
+      appNote: null,
+      appSpan: null,
     });
 
     connection.lastTsMicros = tsMicros;
   }
+}
+
+/**
+ * 决定要不要留下这个包的载荷。
+ *
+ * 现有设计是「载荷即用即弃，内存与连接数相关而与文件大小无关」，展示报文必须打破它，
+ * 所以只对可能是 HTTP 的连接保留，并且两头都设上限：
+ * 认出协议前每方向 32KB，认出之后每条连接 1MB。TLS 一眼就能否掉，代价接近零。
+ */
+function retainPayload(
+  capture: AppCapture,
+  direction: Direction,
+  relSeq: number,
+  payload: Uint8Array,
+  packetIndex: number,
+  tsMicros: number,
+): void {
+  if (capture.decided && capture.protocol !== 'http1') return;
+
+  if (capture.protocol !== 'http1') {
+    const verdict = sniffAppProtocol(payload, direction);
+
+    if (verdict === 'tls') {
+      capture.protocol = 'tls';
+      capture.decided = true;
+      capture.client = [];
+      capture.server = [];
+      capture.retainedBytes = 0;
+      return;
+    }
+
+    if (verdict === 'http1') {
+      capture.protocol = 'http1';
+      capture.decided = true;
+    } else {
+      // 还没认出来：花预算先存着，等后面的包再看。预算耗尽仍无结论就放弃这条连接
+      const budget = direction === 'c2s' ? capture.clientSniffBudget : capture.serverSniffBudget;
+      if (budget <= 0) {
+        if (capture.clientSniffBudget <= 0 && capture.serverSniffBudget <= 0) {
+          capture.protocol = 'unknown';
+          capture.decided = true;
+          capture.client = [];
+          capture.server = [];
+          capture.retainedBytes = 0;
+        }
+        return;
+      }
+      if (direction === 'c2s') capture.clientSniffBudget -= payload.length;
+      else capture.serverSniffBudget -= payload.length;
+    }
+  }
+
+  if (capture.retainedBytes + payload.length > HTTP_RETAIN_CAP) {
+    capture.capped = true;
+    return;
+  }
+
+  // 必须复制：payload 是整个抓包文件 buffer 的 subarray，
+  // 直接留住会让一个几十字节的片段把整份 pcap 钉在内存里
+  const bytes = payload.slice();
+  capture.retainedBytes += bytes.length;
+  (direction === 'c2s' ? capture.client : capture.server).push({
+    relSeq,
+    bytes,
+    packetIndex,
+    tsMicros,
+  });
 }
 
 /**
@@ -348,6 +470,34 @@ function materialize(connection: MutableConnection): Connection {
 
   const handshakeCaptured = connection.sawClientSyn && connection.sawServerSynAck;
 
+  let appProtocol = connection.appCapture.protocol;
+  let http: HttpAnalysis | null = null;
+  let httpSummary: HttpSummary | null = null;
+
+  if (appProtocol === 'http1') {
+    const result = analyzeHttp({
+      clientSegments: connection.appCapture.client,
+      serverSegments: connection.appCapture.server,
+      handshakeCaptured,
+      clientClosed: connection.clientFin,
+      serverClosed: connection.serverFin,
+      payloadCapped: connection.appCapture.capped,
+      packets: connection.packets,
+    });
+
+    if (result.analysis.transactions.length === 0) {
+      // 签名命中了却一条消息都解不出来，说明判断有误，不硬报成 HTTP
+      appProtocol = 'unknown';
+    } else {
+      http = result.analysis;
+      httpSummary = result.summary;
+      for (const packet of connection.packets) {
+        packet.appSpan = result.spans.get(packet.packetIndex) ?? null;
+        packet.appNote = result.notes.get(packet.packetIndex) ?? null;
+      }
+    }
+  }
+
   return {
     id: `${connection.key}#${connection.generation}`,
     clientAddr: connection.clientAddr,
@@ -385,6 +535,9 @@ function materialize(connection: MutableConnection): Connection {
       duplicateAcks,
       lostSegments,
     },
+    appProtocol,
+    http,
+    httpSummary,
     packets: connection.packets,
   };
 }

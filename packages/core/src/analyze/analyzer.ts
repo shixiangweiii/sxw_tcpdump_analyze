@@ -81,7 +81,9 @@ export function analyze(bytes: Uint8Array, options: AnalyzeOptions = {}): Analys
         if (httpHost) hosts.addName(dst, httpHost, 'http-host', packet.index);
       }
 
-      tracker.add(packet.index, packet.tsMicros, packet.network, tcp);
+      // 载荷在这里交给连接跟踪器，由它按协议嗅探结果决定留不留——
+      // 只有可能是 HTTP 的连接才会保留，其余仍然即用即弃
+      tracker.add(packet.index, packet.tsMicros, packet.network, tcp, packet.payload);
       continue;
     }
 

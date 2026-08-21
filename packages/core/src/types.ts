@@ -143,6 +143,132 @@ export interface Anomaly {
   detail: string;
 }
 
+// ---------------------------------------------------------------- 应用层（HTTP）
+
+/**
+ * 连接上跑的是什么应用层协议。
+ * 只做能确定判断的三类：明文 HTTP/1.x、TLS（识别出来就跳过，不解密）、其余一律 unknown。
+ */
+export type AppProtocol = 'http1' | 'tls' | 'unknown';
+
+export interface HttpHeader {
+  name: string;
+  value: string;
+}
+
+/** 正文的框定方式。决定「读多少字节算这条消息的正文」 */
+export type HttpBodyFraming = 'content-length' | 'chunked' | 'until-close' | 'none';
+
+export interface HttpBody {
+  framing: HttpBodyFraming;
+  /** 解块之后的真实字节数 */
+  byteCount: number;
+  /** 解码后的正文。二进制或被压缩时为 null */
+  text: string | null;
+  /** text 触及上限被截断 */
+  truncated: boolean;
+  /** 实际用于解码的字符集 */
+  charset: string | null;
+  /** 拿不到正文文本的原因，例如「Content-Encoding: gzip，本工具暂不解压」 */
+  unavailableReason: string | null;
+}
+
+export interface HttpMessage {
+  kind: 'request' | 'response';
+  /** 这条消息在本方向流里的字节区间 [start, end) */
+  streamStart: number;
+  streamEnd: number;
+  /** 起始行原文，例如 `GET / HTTP/1.1` */
+  startLine: string;
+  method?: string;
+  target?: string;
+  statusCode?: number;
+  reasonPhrase?: string;
+  httpVersion: string;
+  headers: HttpHeader[];
+  /** 起始行 + 头部 + 空行的总字节数 */
+  headerByteCount: number;
+  body: HttpBody | null;
+  /** 承载这条消息第一个 / 最后一个字节的包序号（按流序，不是抓包序） */
+  firstPacketIndex: number;
+  lastPacketIndex: number;
+  firstTsMicros: number;
+  lastTsMicros: number;
+  /** 消息是否完整。流里有洞、抓包提前结束、载荷保留触顶都会置 false */
+  complete: boolean;
+  incompleteReason: string | null;
+}
+
+/**
+ * 一次请求-响应的耗时分解。这是内网排查最需要的东西——
+ * 回答「慢在网络还是慢在服务端」，而不是只给一个总耗时。
+ */
+export interface HttpTiming {
+  /** 请求最后一字节 → 服务端确认收到。约等于一个 RTT，反映链路 */
+  requestAckedMicros: number | null;
+  /** 请求最后一字节 → 响应第一字节。减去 RTT 就是服务端处理时间 */
+  ttfbMicros: number | null;
+  /** 响应第一字节 → 最后一字节。反映响应体传输 */
+  responseTransferMicros: number | null;
+  /** 请求最后一字节 → 响应最后一字节 */
+  totalMicros: number | null;
+}
+
+export interface HttpTransaction {
+  /** 连接内的第几个事务，从 1 开始 */
+  index: number;
+  request: HttpMessage | null;
+  response: HttpMessage | null;
+  timing: HttpTiming;
+  /** 人话结论，例如「GET / → 200 OK，服务端处理 7.5ms」 */
+  note: string;
+}
+
+export interface HttpQuality {
+  /** 客户端 / 服务端方向的流是否完整（无洞、从流起点开始） */
+  clientStreamComplete: boolean;
+  serverStreamComplete: boolean;
+  /** 流里没被抓到的区间 */
+  gaps: { direction: Direction; from: number; to: number }[];
+  /** 被判定为重复而丢弃的段数 */
+  duplicateSegmentsDropped: number;
+  /** 载荷保留触及上限，正文只有前一部分 */
+  payloadCapped: boolean;
+}
+
+export interface HttpAnalysis {
+  transactions: HttpTransaction[];
+  quality: HttpQuality;
+}
+
+/** 连接列表用的轻量摘要，不含头部与正文，避免把列表响应撑爆 */
+export interface HttpSummary {
+  transactionCount: number;
+  /** 第一个事务的请求行，例如 `GET /` */
+  firstLine: string | null;
+  /** 第一个事务的响应状态码 */
+  statusCode: number | null;
+}
+
+/**
+ * 一个包承载的应用层数据落在哪里。
+ * 这是「点梯形图某一行 → 高亮它在报文里对应的那段」的依据。
+ */
+export interface AppSpan {
+  transactionIndex: number;
+  messageKind: 'request' | 'response';
+  /** 这个包的数据落在消息的哪个部分 */
+  part: 'start-line' | 'headers' | 'body' | 'mixed';
+  /** 在本方向流里的字节区间 [from, to) */
+  streamFrom: number;
+  streamTo: number;
+  /** 落在正文里时，对应解码后文本的字符区间；否则为 null */
+  textFrom: number | null;
+  textTo: number | null;
+  /** 重传或重复数据，不参与流拼接 */
+  duplicate: boolean;
+}
+
 export interface ConnectionPacket {
   /** 对应全局抓包序号，方便与 Wireshark 对照 */
   packetIndex: number;
@@ -166,6 +292,10 @@ export interface ConnectionPacket {
   anomalies: Anomaly[];
   /** 人话注解，例如「客户端发起建连，起始编号 0」 */
   note: string;
+  /** 应用层视角的补充注解，例如「响应正文第 1399~2797 字节」。非 HTTP 连接为 null */
+  appNote: string | null;
+  /** 这个包承载的应用层数据落在报文的哪一段。非 HTTP 或纯 ACK 时为 null */
+  appSpan: AppSpan | null;
 }
 
 export type ConnectionOutcome =
@@ -220,6 +350,12 @@ export interface Connection {
   handshakeRttMicros: number | null;
   quality: ConnectionQuality;
   stats: ConnectionStats;
+  /** 识别出的应用层协议 */
+  appProtocol: AppProtocol;
+  /** HTTP 解析结果。appProtocol 不是 http1 时为 null */
+  http: HttpAnalysis | null;
+  /** 供连接列表用的轻量摘要 */
+  httpSummary: HttpSummary | null;
   packets: ConnectionPacket[];
 }
 

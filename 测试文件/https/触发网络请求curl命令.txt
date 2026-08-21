@@ -1,9 +1,9 @@
-U-VX9HX54K-2315:~ shixiangweii$ curl "https://www.yuhang.gov.cn" -v
+shixiangweii@shixiangweiideMacBook-Pro opencode_proj % curl "https://www.yuhang.gov.cn" -v
 * Host www.yuhang.gov.cn:443 was resolved.
-* IPv6: ::ffff:0:c612:8d
-* IPv4: 198.18.0.141
-*   Trying 198.18.0.141:443...
-* Connected to www.yuhang.gov.cn (198.18.0.141) port 443
+* IPv6: (none)
+* IPv4: 203.107.60.182
+*   Trying 203.107.60.182:443...
+* Connected to www.yuhang.gov.cn (203.107.60.182) port 443
 * ALPN: curl offers h2,http/1.1
 * (304) (OUT), TLS handshake, Client hello (1):
 *  CAfile: /etc/ssl/cert.pem
@@ -34,11 +34,11 @@ U-VX9HX54K-2315:~ shixiangweii$ curl "https://www.yuhang.gov.cn" -v
 >
 * Request completely sent off
 < HTTP/1.1 403 Forbidden
-< Date: Fri, 21 Aug 2026 08:32:12 GMT
+< Date: Fri, 21 Aug 2026 12:10:29 GMT
 < Content-Type: text/html; charset=utf-8
 < Content-Length: 150
 < Connection: keep-alive
-< Set-Cookie: aliyungf_tc=353ef7bf782b90fbcfe023226aca249219f8d0491b2137cbcefa521b685fe0ed; Path=/; HttpOnly
+< Set-Cookie: aliyungf_tc=931f5a1571a68c3d80ebf8425109431ac927334d092cc95bd18ef98afd99310c; Path=/; HttpOnly
 < X-RateLimit-Limit: 1000
 < X-RateLimit-Remaining: 999
 < X-RateLimit-Reset: 60
@@ -51,12 +51,13 @@ U-VX9HX54K-2315:~ shixiangweii$ curl "https://www.yuhang.gov.cn" -v
 </body>
 </html>
 * Connection #0 to host www.yuhang.gov.cn left intact
-U-VX9HX54K-2315:~ shixiangweii$ curl "https://www.yuhang.gov.cn" -v
+shixiangweii@shixiangweiideMacBook-Pro opencode_proj % clear
+shixiangweii@shixiangweiideMacBook-Pro opencode_proj % curl "https://www.yuhang.gov.cn" -v
 * Host www.yuhang.gov.cn:443 was resolved.
-* IPv6: ::ffff:0:c612:8d
-* IPv4: 198.18.0.141
-*   Trying 198.18.0.141:443...
-* Connected to www.yuhang.gov.cn (198.18.0.141) port 443
+* IPv6: (none)
+* IPv4: 203.107.60.182
+*   Trying 203.107.60.182:443...
+* Connected to www.yuhang.gov.cn (203.107.60.182) port 443
 * ALPN: curl offers h2,http/1.1
 * (304) (OUT), TLS handshake, Client hello (1):
 *  CAfile: /etc/ssl/cert.pem
@@ -87,11 +88,11 @@ U-VX9HX54K-2315:~ shixiangweii$ curl "https://www.yuhang.gov.cn" -v
 >
 * Request completely sent off
 < HTTP/1.1 403 Forbidden
-< Date: Fri, 21 Aug 2026 08:32:18 GMT
+< Date: Fri, 21 Aug 2026 12:11:11 GMT
 < Content-Type: text/html; charset=utf-8
 < Content-Length: 150
 < Connection: keep-alive
-< Set-Cookie: aliyungf_tc=b4ec3f8989137934758228adfc19fb8f97942bd8e51e590fe6ee68f3812c5161; Path=/; HttpOnly
+< Set-Cookie: aliyungf_tc=475948325a6df2012597f027d3d5d5605df38bc52e51a9bf6bcfd33470c5a59e; Path=/; HttpOnly
 < X-RateLimit-Limit: 1000
 < X-RateLimit-Remaining: 999
 < X-RateLimit-Reset: 60
@@ -104,4 +105,57 @@ U-VX9HX54K-2315:~ shixiangweii$ curl "https://www.yuhang.gov.cn" -v
 </body>
 </html>
 * Connection #0 to host www.yuhang.gov.cn left intact
-U-VX9HX54K-2315:~ shixiangweii$
+shixiangweii@shixiangweiideMacBook-Pro opencode_proj % curl "https://www.yuhang.gov.cn" -v
+* Host www.yuhang.gov.cn:443 was resolved.
+* IPv6: (none)
+* IPv4: 203.107.60.182
+*   Trying 203.107.60.182:443...
+* Connected to www.yuhang.gov.cn (203.107.60.182) port 443
+* ALPN: curl offers h2,http/1.1
+* (304) (OUT), TLS handshake, Client hello (1):
+*  CAfile: /etc/ssl/cert.pem
+*  CApath: none
+* (304) (IN), TLS handshake, Server hello (2):
+* TLSv1.2 (IN), TLS handshake, Certificate (11):
+* TLSv1.2 (IN), TLS handshake, Server key exchange (12):
+* TLSv1.2 (IN), TLS handshake, Server finished (14):
+* TLSv1.2 (OUT), TLS handshake, Client key exchange (16):
+* TLSv1.2 (OUT), TLS change cipher, Change cipher spec (1):
+* TLSv1.2 (OUT), TLS handshake, Finished (20):
+* TLSv1.2 (IN), TLS change cipher, Change cipher spec (1):
+* TLSv1.2 (IN), TLS handshake, Finished (20):
+* SSL connection using TLSv1.2 / ECDHE-RSA-AES128-GCM-SHA256 / [blank] / UNDEF
+* ALPN: server accepted http/1.1
+* Server certificate:
+*  subject: C=CN; ST=\U6D59\U6C5F\U7701; L=\U676D\U5DDE\U5E02; O=\U676D\U5DDE\U5E02\U4F59\U676D\U533A\U6570\U636E\U8D44\U6E90\U7BA1\U7406\U5C40; CN=*.yuhang.gov.cn
+*  start date: Oct 21 08:44:40 2025 GMT
+*  expire date: Oct 21 08:44:39 2026 GMT
+*  subjectAltName: host "www.yuhang.gov.cn" matched cert's "*.yuhang.gov.cn"
+*  issuer: C=CN; O=China Financial Certification Authority; CN=CFCA OV OCA
+*  SSL certificate verify ok.
+* using HTTP/1.x
+> GET / HTTP/1.1
+> Host: www.yuhang.gov.cn
+> User-Agent: curl/8.7.1
+> Accept: */*
+>
+* Request completely sent off
+< HTTP/1.1 403 Forbidden
+< Date: Fri, 21 Aug 2026 12:11:13 GMT
+< Content-Type: text/html; charset=utf-8
+< Content-Length: 150
+< Connection: keep-alive
+< Set-Cookie: aliyungf_tc=c8c9bead05cb71f8480a18f7cef011c8a2e6b2d1dbfcd1c82982cac15463631b; Path=/; HttpOnly
+< X-RateLimit-Limit: 1000
+< X-RateLimit-Remaining: 999
+< X-RateLimit-Reset: 60
+<
+<html>
+<head><title>403 Forbidden</title></head>
+<body>
+<center><h1>403 Forbidden</h1></center>
+<hr><center>openresty</center>
+</body>
+</html>
+* Connection #0 to host www.yuhang.gov.cn left intact
+shixiangweii@shixiangweiideMacBook-Pro opencode_proj %

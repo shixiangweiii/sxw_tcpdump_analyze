@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Connection, ConnectionOutcome } from '@tcpview/core';
 import { formatBytes, formatDuration, outcomeLabel } from '@tcpview/core';
 import type { ConnectionsResponse, ConnectionSummary } from '../api';
+import { HttpTransactions } from './HttpTransactions';
 import { LadderDiagram } from './LadderDiagram';
 
 interface Props {
@@ -81,10 +82,7 @@ export function ConnectionList({ view, expandedId, expanded, loadingId, onToggle
                   onToggle={() => onToggle(connection.id)}
                 />
                 {expandedId === connection.id && expanded && (
-                  <div className="detail">
-                    <QualityNotes connection={expanded} />
-                    <LadderDiagram connection={expanded} />
-                  </div>
+                  <ConnectionDetail connection={expanded} />
                 )}
               </div>
             ))}
@@ -93,6 +91,58 @@ export function ConnectionList({ view, expandedId, expanded, loadingId, onToggle
       )}
     </div>
   );
+}
+
+/**
+ * 展开后的连接详情。
+ *
+ * 顺序是有讲究的：先说结论可不可信，再给 HTTP 报文（大多数人只看这个），
+ * 最后才是逐包时序图。选中的包由这里持有，梯形图和报文正文共享同一个高亮状态。
+ */
+function ConnectionDetail({ connection }: { connection: Connection }) {
+  const [selectedPacket, setSelectedPacket] = useState<number | null>(null);
+
+  // 换一条连接时上一条的选中项必须清掉，否则会高亮到不相干的位置
+  useEffect(() => setSelectedPacket(null), [connection.id]);
+
+  const selectedSpan = useMemo(() => {
+    if (selectedPacket === null) return null;
+    return (
+      connection.packets.find((packet) => packet.packetIndex === selectedPacket)?.appSpan ?? null
+    );
+  }, [connection.packets, selectedPacket]);
+
+  return (
+    <div className="detail">
+      <QualityNotes connection={connection} />
+
+      {connection.http ? (
+        <HttpTransactions http={connection.http} selectedSpan={selectedSpan} />
+      ) : (
+        <NonHttpNotice connection={connection} />
+      )}
+
+      <LadderDiagram
+        connection={connection}
+        selectedPacketIndex={selectedPacket}
+        onSelectPacket={setSelectedPacket}
+      />
+    </div>
+  );
+}
+
+/** 解不出报文时说清楚是为什么，而不是什么都不显示让人以为工具坏了 */
+function NonHttpNotice({ connection }: { connection: Connection }) {
+  if (connection.stats.byteCount === 0) return null;
+
+  const reason =
+    connection.appProtocol === 'tls'
+      ? '这条连接跑的是 TLS（HTTPS），内容是加密的，看不到明文报文。'
+      : !connection.quality.handshakeCaptured
+        ? '抓包开始时这条连接已经在传输中了，看不到报文的开头，无法还原应用层内容。'
+        : '没有识别出应用层协议，本工具目前只能还原明文 HTTP/1.x 的报文。';
+
+  return <div className="alert info http-none">{reason}</div>;
 }
 
 function PerspectiveBanner({ view }: { view: ConnectionsResponse }) {
@@ -153,6 +203,8 @@ function ConnectionRow({ connection, expanded, loading, onToggle }: RowProps) {
         {label.text}
       </span>
 
+      <HttpChip connection={connection} />
+
       <span className="row-stats">
         <span>{connection.stats.packetCount} 包</span>
         <span>{formatBytes(connection.stats.byteCount)}</span>
@@ -168,6 +220,40 @@ function ConnectionRow({ connection, expanded, loading, onToggle }: RowProps) {
         <AnomalyChips connection={connection} />
       </span>
     </button>
+  );
+}
+
+/**
+ * 不展开也能看出这条连接干了什么，这是列表里最有用的一列。
+ * 外层 span 必须无条件渲染：.row 是固定列数的 grid，少一个子元素后面的列就会错位。
+ */
+function HttpChip({ connection }: { connection: ConnectionSummary }) {
+  return <span className="row-app">{renderChip(connection)}</span>;
+}
+
+function renderChip(connection: ConnectionSummary) {
+  if (connection.appProtocol === 'tls') {
+    return (
+      <span className="chip" title="HTTPS 流量，内容加密，看不到明文报文">
+        TLS
+      </span>
+    );
+  }
+
+  const summary = connection.httpSummary;
+  if (!summary) return null;
+
+  const status = summary.statusCode;
+  const tone = status === null ? 'warn' : status >= 500 ? 'bad' : status >= 400 ? 'warn' : 'ok';
+  const text = [summary.firstLine, status === null ? '无响应' : `→ ${status}`]
+    .filter(Boolean)
+    .join(' ');
+
+  return (
+    <span className={`chip ${tone}`} title="展开可以看到完整的请求与响应报文">
+      {text}
+      {summary.transactionCount > 1 && ` 等 ${summary.transactionCount} 个请求`}
+    </span>
   );
 }
 

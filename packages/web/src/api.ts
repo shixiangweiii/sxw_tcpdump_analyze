@@ -9,8 +9,8 @@ export interface UploadResponse {
   connectionCount: number;
 }
 
-/** 连接列表接口不返回逐包数据，避免大连接把响应撑爆 */
-export type ConnectionSummary = Omit<Connection, 'packets'>;
+/** 连接列表接口不返回逐包数据与 HTTP 报文，避免大连接把响应撑爆 */
+export type ConnectionSummary = Omit<Connection, 'packets' | 'http'>;
 
 export interface ConnectionsResponse extends Omit<HostView, 'connections'> {
   connections: ConnectionSummary[];

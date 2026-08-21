@@ -1,18 +1,19 @@
 import { Fragment } from 'react';
-import type { Connection, ConnectionPacket } from '@tcpview/core';
+import type { AppSpan, Connection, ConnectionPacket, HttpTransaction } from '@tcpview/core';
 import { anomalyLabel, formatDuration } from '@tcpview/core';
 
-const ROW_HEIGHT = 62;
 const HEADER_HEIGHT = 56;
 // 人话注解是这个工具的核心价值，布局优先保证它完整可见。
 // 实测最长注解约 410px、最长序号行约 321px，下面的取值使两者都有余量。
 const LEFT_LANE = 140;
 const RIGHT_LANE = 470;
-const NOTE_X = RIGHT_LANE + 38;
-const CANVAS_WIDTH = 1040;
+const BADGE_X = RIGHT_LANE + 38;
+const BADGE_WIDTH = 54;
 
 interface Props {
   connection: Connection;
+  selectedPacketIndex: number | null;
+  onSelectPacket: (packetIndex: number | null) => void;
 }
 
 /**
@@ -20,13 +21,22 @@ interface Props {
  *
  * 手写 SVG 而不用图表库，因为需要完全控制布局——箭头方向、标志位、序号、时间差、
  * 人话注解、异常高亮要挤在同一行里且互不遮挡，通用图表库做不到。
+ *
+ * 报文正文不在这里渲染：SVG 没有文本流式布局，换行要自己算。
+ * 这里只负责标出「这个包承载了报文的哪一段」，正文由 HttpTransactions 用 HTML 渲染。
  */
-export function LadderDiagram({ connection }: Props) {
-  const height = HEADER_HEIGHT + connection.packets.length * ROW_HEIGHT + 30;
+export function LadderDiagram({ connection, selectedPacketIndex, onSelectPacket }: Props) {
+  // 有应用层注解时每行要多放一行字，行高与注解起始位置都跟着变
+  const hasAppLayer = connection.packets.some((packet) => packet.appNote !== null);
+  const rowHeight = hasAppLayer ? 80 : 62;
+  const noteX = hasAppLayer ? BADGE_X + BADGE_WIDTH + 10 : RIGHT_LANE + 38;
+  const canvasWidth = noteX + 570;
+
+  const height = HEADER_HEIGHT + connection.packets.length * rowHeight + 30;
 
   return (
     <div className="ladder">
-      <svg width={CANVAS_WIDTH} height={height} role="img" aria-label="TCP 时序图">
+      <svg width={canvasWidth} height={height} role="img" aria-label="TCP 时序图">
         {/* 两侧的生命线 */}
         <line x1={LEFT_LANE} y1={HEADER_HEIGHT - 18} x2={LEFT_LANE} y2={height - 16} className="lifeline" />
         <line x1={RIGHT_LANE} y1={HEADER_HEIGHT - 18} x2={RIGHT_LANE} y2={height - 16} className="lifeline" />
@@ -48,8 +58,18 @@ export function LadderDiagram({ connection }: Props) {
           <PacketRow
             key={`${packet.packetIndex}-${index}`}
             packet={packet}
-            y={HEADER_HEIGHT + index * ROW_HEIGHT}
+            y={HEADER_HEIGHT + index * rowHeight}
+            rowHeight={rowHeight}
+            noteX={noteX}
+            canvasWidth={canvasWidth}
             seqBaseEstimated={connection.quality.seqBaseEstimated}
+            transaction={
+              packet.appSpan
+                ? (connection.http?.transactions[packet.appSpan.transactionIndex - 1] ?? null)
+                : null
+            }
+            selected={selectedPacketIndex === packet.packetIndex}
+            onSelect={onSelectPacket}
           />
         ))}
       </svg>
@@ -60,19 +80,49 @@ export function LadderDiagram({ connection }: Props) {
 interface RowProps {
   packet: ConnectionPacket;
   y: number;
+  rowHeight: number;
+  noteX: number;
+  canvasWidth: number;
   seqBaseEstimated: boolean;
+  transaction: HttpTransaction | null;
+  selected: boolean;
+  onSelect: (packetIndex: number | null) => void;
 }
 
-function PacketRow({ packet, y, seqBaseEstimated }: RowProps) {
+function PacketRow({
+  packet,
+  y,
+  rowHeight,
+  noteX,
+  canvasWidth,
+  seqBaseEstimated,
+  transaction,
+  selected,
+  onSelect,
+}: RowProps) {
   const toRight = packet.direction === 'c2s';
   const startX = toRight ? LEFT_LANE : RIGHT_LANE;
   const endX = toRight ? RIGHT_LANE : LEFT_LANE;
 
   const severity = worstSeverity(packet);
   const arrowClass = `arrow ${severity}`;
+  const clickable = packet.appSpan !== null;
+
+  // 有应用层注解时它占掉第一行，异常注解顺次下移
+  const anomalyBaseline = packet.appNote ? y + 30 : y + 13;
 
   return (
     <Fragment>
+      {/* 整行的点击热区。只有承载了报文的包才可选——纯 ACK 点了也没有正文可高亮 */}
+      <rect
+        x={0}
+        y={y - rowHeight / 2}
+        width={canvasWidth}
+        height={rowHeight}
+        className={`row-hit ${selected ? 'selected' : ''} ${clickable ? 'clickable' : ''}`}
+        onClick={() => clickable && onSelect(selected ? null : packet.packetIndex)}
+      />
+
       {/* 时间列 */}
       <text x={12} y={y + 4} className="time-cell">
         +{formatDuration(packet.offsetMicros)}
@@ -90,32 +140,29 @@ function PacketRow({ packet, y, seqBaseEstimated }: RowProps) {
       <polygon points={arrowHead(endX, y, toRight)} className={`arrow-head ${severity}`} />
 
       {/* 标志位与序号：贴在箭头上方 */}
-      <text
-        x={(LEFT_LANE + RIGHT_LANE) / 2}
-        y={y - 22}
-        className="flags"
-        textAnchor="middle"
-      >
+      <text x={(LEFT_LANE + RIGHT_LANE) / 2} y={y - 22} className="flags" textAnchor="middle">
         {packet.flags.join(' · ') || '（无标志位）'}
       </text>
-      <text
-        x={(LEFT_LANE + RIGHT_LANE) / 2}
-        y={y - 7}
-        className="seq"
-        textAnchor="middle"
-      >
+      <text x={(LEFT_LANE + RIGHT_LANE) / 2} y={y - 7} className="seq" textAnchor="middle">
         {formatSeq(packet, seqBaseEstimated)}
       </text>
 
+      {packet.appSpan && <AppBadge span={packet.appSpan} transaction={transaction} y={y} />}
+
       {/* 人话注解 */}
-      <text x={NOTE_X} y={y - 4} className="note">
+      <text x={noteX} y={y - 4} className="note">
         {packet.note}
       </text>
+      {packet.appNote && (
+        <text x={noteX} y={y + 14} className={`app-note ${appNoteTone(packet.appSpan)}`}>
+          {packet.appNote}
+        </text>
+      )}
       {packet.anomalies.map((anomaly, i) => (
         <text
           key={anomaly.kind}
-          x={NOTE_X}
-          y={y + 13 + i * 15}
+          x={noteX}
+          y={anomalyBaseline + i * 15}
           className={`anomaly-note ${anomalyLabel(anomaly.kind).tone}`}
         >
           ⚠ {anomalyLabel(anomaly.kind).text}：{anomaly.detail}
@@ -123,6 +170,63 @@ function PacketRow({ packet, y, seqBaseEstimated }: RowProps) {
       ))}
     </Fragment>
   );
+}
+
+/** 一眼看出这个包在报文里的角色，不用读完整句注解 */
+function AppBadge({
+  span,
+  transaction,
+  y,
+}: {
+  span: AppSpan;
+  transaction: HttpTransaction | null;
+  y: number;
+}) {
+  const { text, tone } = badgeContent(span, transaction);
+
+  return (
+    <Fragment>
+      <rect
+        x={BADGE_X}
+        y={y - 11}
+        width={BADGE_WIDTH}
+        height={22}
+        rx={4}
+        className={`app-badge-box ${tone}`}
+      />
+      <text
+        x={BADGE_X + BADGE_WIDTH / 2}
+        y={y + 4}
+        className={`app-badge-text ${tone}`}
+        textAnchor="middle"
+      >
+        {text}
+      </text>
+    </Fragment>
+  );
+}
+
+function badgeContent(
+  span: AppSpan,
+  transaction: HttpTransaction | null,
+): { text: string; tone: string } {
+  if (span.duplicate) return { text: '重复', tone: 'dup' };
+
+  if (span.part === 'start-line' || span.part === 'mixed') {
+    if (span.messageKind === 'request') {
+      return { text: transaction?.request?.method ?? '请求', tone: 'start' };
+    }
+    const status = transaction?.response?.statusCode;
+    return { text: status === undefined ? '响应' : String(status), tone: 'start' };
+  }
+
+  return { text: '…续', tone: 'cont' };
+}
+
+function appNoteTone(span: AppSpan | null): string {
+  if (!span) return '';
+  if (span.duplicate) return 'dup';
+  return span.part === 'start-line' || span.part === 'mixed' ? 'start' : '';
 }
 
 /**

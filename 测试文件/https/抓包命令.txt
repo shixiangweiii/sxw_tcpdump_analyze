@@ -1,0 +1,11 @@
+shixiangweii@shixiangweiideMacBook-Pro opencode_proj % sudo tcpdump -i any host www.yuhang.gov.cn -w packet.pcap
+Password:
+tcpdump: data link type PKTAP
+tcpdump: listening on any, link-type PKTAP (Apple DLT_PKTAP), snapshot length 524288 bytes
+^C46 packets captured
+439 packets received by filter
+0 packets dropped by kernel
+shixiangweii@shixiangweiideMacBook-Pro opencode_proj % ls
+packet.pcap			test				test_agentic_workflow		test_agentic_workflow_minimax
+shixiangweii@shixiangweiideMacBook-Pro opencode_proj % open .
+shixiangweii@shixiangweiideMacBook-Pro opencode_proj %

@@ -55,7 +55,7 @@ export async function buildServer() {
     }
   });
 
-  /** 按 host 过滤连接列表。包序列不在这里返回，避免大连接把响应撑爆 */
+  /** 按 host 过滤连接列表。包序列与 HTTP 报文不在这里返回，避免大连接把响应撑爆 */
   app.get<{ Params: { id: string }; Querystring: { host?: string } }>(
     '/api/sessions/:id/connections',
     async (request, reply) => {
@@ -76,8 +76,10 @@ export async function buildServer() {
         matchedNames: view.matchedNames,
         perspective: view.perspective,
         nonTcp: view.nonTcp,
-        connections: view.connections.map(({ packets, ...summary }) => {
+        // http 里带着完整报文正文，列表阶段只留 httpSummary，展开某条连接时才取完整的
+        connections: view.connections.map(({ packets, http, ...summary }) => {
           void packets;
+          void http;
           return summary;
         }),
       };

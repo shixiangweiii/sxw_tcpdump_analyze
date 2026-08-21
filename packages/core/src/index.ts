@@ -6,6 +6,22 @@ export { decodePacket } from './decode/packet.js';
 export { flagNames } from './decode/transport.js';
 export { extractDnsMappings } from './decode/dns.js';
 export { extractHttpHost, extractSni } from './decode/appnames.js';
+export {
+  HTTP_METHODS,
+  parseRequests,
+  parseResponses,
+  sniffAppProtocol,
+  type ParseOptions,
+  type ParsedMessage,
+} from './decode/http.js';
+
+export {
+  reassemble,
+  type ReassembledStream,
+  type StreamPiece,
+  type StreamSegment,
+} from './analyze/reassemble.js';
+export { analyzeHttp, type HttpAnalysisInput } from './analyze/http-analysis.js';
 
 export { analyze, type AnalyzeOptions } from './analyze/analyzer.js';
 export {

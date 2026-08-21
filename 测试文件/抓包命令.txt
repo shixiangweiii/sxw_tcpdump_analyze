@@ -1,9 +1,0 @@
-U-VX9HX54K-2315:opencode_proj shixiangweii$ sudo tcpdump -i any host www.yuhang.gov.cn -w packet.pcap
-Password:
-tcpdump: data link type PKTAP
-tcpdump: listening on any, link-type PKTAP (Apple DLT_PKTAP), snapshot length 524288 bytes
-^C38 packets captured
-5458 packets received by filter
-0 packets dropped by kernel
-U-VX9HX54K-2315:opencode_proj shixiangweii$ open .
-U-VX9HX54K-2315:opencode_proj shixiangweii$

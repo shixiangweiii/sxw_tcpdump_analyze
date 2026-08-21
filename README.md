@@ -13,6 +13,9 @@
 - **再展开时序梯形图**，左客户端右服务端，每个包配一句人话：`客户端发起建连（SYN），起始编号 0`
 - **序号双份显示**：相对序号从 0 开始（看得懂），括号里是原始序号（能跟 Wireshark 对账）
 - **异常直接标出来**：重传、快速重传、疑似乱序、零窗口、重复确认、丢段
+- **明文 HTTP 直接还原报文**：请求行、响应头、正文（自动解块、按 charset 解码），
+  并给出耗时分解 `请求送达 41.79ms / 服务端处理 8.42ms / 响应传输 48.81ms`——
+  内网排查最常吵的「是网络慢还是服务端慢」，这一行就能定案
 
 ## 快速开始
 
@@ -91,8 +94,8 @@ npm run verify:tshark # 与 tshark 的 tcp.analysis.* 字段逐包对账
 packages/
   core/     纯 TS，无 IO：pcap 解析 → 协议解码 → 连接重组 → 异常判定
     src/pcap/      经典 pcap 与 pcapng 容器（手写，不依赖第三方库）
-    src/decode/    链路层 / IP / TCP / UDP / DNS / TLS SNI / HTTP Host
-    src/analyze/   连接跟踪、状态机、异常检测、人话注解、host 注册表
+    src/decode/    链路层 / IP / TCP / UDP / DNS / TLS SNI / HTTP 报文解析
+    src/analyze/   连接跟踪、状态机、异常检测、流重组、HTTP 事务、人话注解、host 注册表
     src/testing/   合成 pcap 构造器与 15 个场景夹具
   server/   Fastify，上传与查询接口，内存态会话
   web/      Vite + React，四个视图，梯形图为手写 SVG
@@ -106,4 +109,8 @@ packages/
 
 **网络层**：IPv4 完整；IPv6 基础（不含扩展头链）；IP 分片只标记不重组
 
-**暂不支持**：k8s Service 名解析、HTTP 耗时分解、QUIC/HTTP3 内容分析、TCP 流载荷重组
+**应用层**：明文 HTTP/1.x 完整还原（TCP 流重组 → 起始行与头部 → chunked 解块 → charset 解码）；
+TLS 只识别不解密
+
+**暂不支持**：k8s Service 名解析、HTTPS 解密、HTTP/2 与 gRPC、QUIC/HTTP3 内容分析、
+HTTP 正文的 gzip/br 解压（会标明「正文是 gzip 压缩的」而不是显示乱码）

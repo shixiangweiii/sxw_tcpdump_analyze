@@ -1,3 +1,5 @@
+import { HTTP_METHODS } from './http.js';
+
 const TLS_RECORD_HANDSHAKE = 0x16;
 const HANDSHAKE_CLIENT_HELLO = 0x01;
 const EXTENSION_SERVER_NAME = 0x0000;
@@ -83,24 +85,12 @@ function parseServerNameList(data: Uint8Array, start: number, end: number): stri
   return null;
 }
 
-const HTTP_METHODS = [
-  'GET ',
-  'POST ',
-  'PUT ',
-  'HEAD ',
-  'DELETE ',
-  'PATCH ',
-  'OPTIONS ',
-  'TRACE ',
-  'CONNECT ',
-];
-
 /** 明文 HTTP 请求的 Host 头。只有未加密流量才拿得到 */
 export function extractHttpHost(payload: Uint8Array): string | null {
   if (payload.length < 16) return null;
 
   const head = latin1(payload, 0, Math.min(payload.length, 12));
-  if (!HTTP_METHODS.some((method) => head.startsWith(method))) return null;
+  if (!HTTP_METHODS.some((method) => head.startsWith(`${method} `))) return null;
 
   // 头部区最多看 8KB，避免在大 body 上做无谓扫描
   const text = latin1(payload, 0, Math.min(payload.length, 8192));

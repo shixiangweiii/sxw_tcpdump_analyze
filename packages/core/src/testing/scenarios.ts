@@ -1,5 +1,6 @@
 import { LinkType } from '../decode/link.js';
 import { PcapBuilder } from './pcap-builder.js';
+import { httpScenarios } from './http-scenarios.js';
 
 const CLIENT = '192.168.1.10';
 const SERVER = '93.184.216.34';
@@ -980,4 +981,5 @@ export const scenarios = {
   linuxCookedCapture,
   vlanTagged,
   macosTunnelCapture,
+  ...httpScenarios,
 };
