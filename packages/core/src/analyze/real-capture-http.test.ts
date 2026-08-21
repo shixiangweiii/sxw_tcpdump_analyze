@@ -210,6 +210,7 @@ describe('真实抓包：耗时分解', () => {
     expect(connection.httpSummary).toEqual({
       transactionCount: 1,
       firstLine: 'GET /',
+      responded: true,
       statusCode: 200,
     });
   });

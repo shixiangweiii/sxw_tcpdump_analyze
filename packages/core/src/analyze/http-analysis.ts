@@ -16,7 +16,7 @@ import type {
   HttpTransaction,
 } from '../types.js';
 import type { ChunkSpan, ParsedMessage } from '../decode/http.js';
-import { mapRawToBody, parseRequests, parseResponses } from '../decode/http.js';
+import { mapRawToBody, parseRequests, parseResponses, resolveCharset } from '../decode/http.js';
 import { reassemble, type ReassembledStream, type StreamSegment } from './reassemble.js';
 import { formatBytes, formatDuration } from './labels.js';
 
@@ -65,26 +65,24 @@ export function analyzeHttp(input: HttpAnalysisInput): HttpAnalysisOutput {
   const requestMessages = requests.map((parsed) => toMessage(parsed, client));
   const responseMessages = responses.map((parsed) => toMessage(parsed, server));
 
-  // HTTP/1.1 不做 pipelining 时，第 n 个响应必然对应第 n 个请求
-  const transactions: HttpTransaction[] = [];
-  const count = Math.max(requestMessages.length, responseMessages.length);
-  for (let i = 0; i < count; i += 1) {
-    const request = requestMessages[i] ?? null;
-    const response = responseMessages[i] ?? null;
-    const timing = computeTiming(request, response, requests[i], client, input.packets);
-    transactions.push({ index: i + 1, request, response, timing, note: describeTransaction(request, response, timing) });
-  }
+  const paired = pair(requestMessages, responseMessages, requests, client, input.packets);
 
   const spans = new Map<number, AppSpan>();
   const notes = new Map<number, string>();
-  collectSpans(spans, notes, client, requests, requestMessages, 'request');
-  collectSpans(spans, notes, server, responses, responseMessages, 'response');
+  collectSpans(spans, notes, client, requests, requestMessages, 'request', paired.requestTxIndex);
+  collectSpans(spans, notes, server, responses, responseMessages, 'response', paired.responseTxIndex);
 
   const analysis: HttpAnalysis = {
-    transactions,
+    transactions: paired.transactions,
     quality: {
-      clientStreamComplete: client.gaps.length === 0 && !client.truncated,
-      serverStreamComplete: server.gaps.length === 0 && !server.truncated,
+      // 「完整」必须同时满足：中间没洞、没触顶、而且确实是从连接起点开始的。
+      // 少了最后一条，抓包从中途开始时会报「完整」，等于骗人
+      clientStreamComplete:
+        client.gaps.length === 0 && !client.truncated && client.startsAtStreamBeginning,
+      serverStreamComplete:
+        server.gaps.length === 0 && !server.truncated && server.startsAtStreamBeginning,
+      clientStartsAtBeginning: client.startsAtStreamBeginning,
+      serverStartsAtBeginning: server.startsAtStreamBeginning,
       gaps: [
         ...client.gaps.map((gap) => ({ direction: 'c2s' as const, from: gap.from, to: gap.to })),
         ...server.gaps.map((gap) => ({ direction: 's2c' as const, from: gap.from, to: gap.to })),
@@ -94,17 +92,99 @@ export function analyzeHttp(input: HttpAnalysisInput): HttpAnalysisOutput {
     },
   };
 
-  const first = transactions[0];
+  const first = paired.transactions[0];
   return {
     analysis,
     summary: {
-      transactionCount: transactions.length,
-      firstLine: first?.request ? `${first.request.method ?? ''} ${first.request.target ?? ''}`.trim() : null,
+      transactionCount: paired.transactions.length,
+      firstLine: first?.request
+        ? `${first.request.method ?? ''} ${first.request.target ?? ''}`.trim()
+        : null,
+      responded: first?.response != null,
       statusCode: first?.response?.statusCode ?? null,
     },
     spans,
     notes,
   };
+}
+
+// ---------------------------------------------------------------- 事务配对
+
+interface Paired {
+  transactions: HttpTransaction[];
+  /** requestMessages[i] 属于第几个事务（1 基） */
+  requestTxIndex: number[];
+  responseTxIndex: number[];
+}
+
+/** 1xx 是中间响应，不构成独立事务 */
+function isInformational(message: HttpMessage): boolean {
+  return message.statusCode !== undefined && message.statusCode >= 100 && message.statusCode < 200;
+}
+
+/**
+ * 请求与响应配对。
+ *
+ * HTTP/1.1 不做 pipelining 时第 n 个响应对应第 n 个请求，但**不能直接按下标配**：
+ * `Expect: 100-continue` 会在正式响应之前插一条 `100 Continue`，
+ * 按下标配会让它顶掉真正的响应，后面全部错位一格——
+ * 界面上就会显示成「POST /up → 100」，而真正的 200 变成「没抓到请求」。
+ */
+function pair(
+  requestMessages: HttpMessage[],
+  responseMessages: HttpMessage[],
+  parsedRequests: ParsedMessage[],
+  clientStream: ReassembledStream,
+  packets: ConnectionPacket[],
+): Paired {
+  const transactions: HttpTransaction[] = [];
+  const requestTxIndex: number[] = [];
+  const responseTxIndex: number[] = [];
+
+  let qi = 0;
+  let ri = 0;
+
+  while (qi < requestMessages.length || ri < responseMessages.length) {
+    const index = transactions.length + 1;
+
+    const requestIndex = qi;
+    const request = requestMessages[qi] ?? null;
+    if (request) requestTxIndex[qi] = index;
+    qi += 1;
+
+    // 正式响应之前夹着的 1xx 全部归到同一个事务
+    const informationalResponses: HttpMessage[] = [];
+    while (ri < responseMessages.length && isInformational(responseMessages[ri]!)) {
+      responseTxIndex[ri] = index;
+      informationalResponses.push(responseMessages[ri]!);
+      ri += 1;
+    }
+
+    const response = responseMessages[ri] ?? null;
+    if (response) {
+      responseTxIndex[ri] = index;
+      ri += 1;
+    }
+
+    const timing = computeTiming(
+      request,
+      response,
+      parsedRequests[requestIndex],
+      clientStream,
+      packets,
+    );
+
+    transactions.push({
+      index,
+      request,
+      response,
+      informationalResponses,
+      timing,
+      note: describeTransaction(request, response, timing),
+    });
+  }
+
+  return { transactions, requestTxIndex, responseTxIndex };
 }
 
 // ---------------------------------------------------------------- 消息定位
@@ -117,6 +197,13 @@ function toMessage(parsed: ParsedMessage, stream: ReassembledStream): HttpMessag
 
   const first = carriers[0];
   const last = carriers[carriers.length - 1];
+
+  // 收齐时间取**最晚到达**的那个包，不能取流序最末的那段：
+  // 乱序时流序最末的段可能最先到，相减会得到负的传输耗时
+  let lastTsMicros = 0;
+  for (const carrier of carriers) {
+    if (carrier.tsMicros > lastTsMicros) lastTsMicros = carrier.tsMicros;
+  }
 
   return {
     kind: parsed.kind,
@@ -134,7 +221,7 @@ function toMessage(parsed: ParsedMessage, stream: ReassembledStream): HttpMessag
     firstPacketIndex: first?.packetIndex ?? -1,
     lastPacketIndex: last?.packetIndex ?? -1,
     firstTsMicros: first?.tsMicros ?? 0,
-    lastTsMicros: last?.tsMicros ?? 0,
+    lastTsMicros,
     complete: parsed.complete,
     incompleteReason: parsed.incompleteReason,
   };
@@ -153,6 +240,8 @@ function collectSpans(
   parsed: ParsedMessage[],
   messages: HttpMessage[],
   kind: 'request' | 'response',
+  /** 第 i 条消息属于第几个事务。1xx 存在时它不等于 i + 1 */
+  txIndex: number[],
 ): void {
   if (parsed.length === 0) return;
 
@@ -197,7 +286,7 @@ function collectSpans(
     }
 
     spans.set(piece.packetIndex, {
-      transactionIndex: index + 1,
+      transactionIndex: txIndex[index] ?? index + 1,
       messageKind: kind,
       part,
       streamFrom: piece.from,
@@ -247,12 +336,8 @@ function buildCharOffsets(
   const sorted = [...boundaries].filter((value) => value >= 0 && value <= bodyBytes.length).sort((a, b) => a - b);
   const table = new Map<number, number>();
 
-  let decoder: TextDecoder;
-  try {
-    decoder = new TextDecoder(charset);
-  } catch {
-    decoder = new TextDecoder('utf-8');
-  }
+  // 用和解正文时同一套字符集解析逻辑，避免这里和 buildBody 各写一份 try/catch 后走岔
+  const { decoder } = resolveCharset(charset);
 
   let chars = 0;
   let cursor = 0;
@@ -298,6 +383,7 @@ function computeTiming(
     ttfbMicros: null,
     responseTransferMicros: null,
     totalMicros: null,
+    serverThinkMicros: null,
   };
 
   if (request && response) {
@@ -324,6 +410,15 @@ function computeTiming(
     if (ack) timing.requestAckedMicros = ack.tsMicros - request.lastTsMicros;
   }
 
+  // 服务端处理时间只有在「送达确认」严格早于「响应首字节」时才测得出来。
+  // 内网快链路 + 延迟 ACK 下，服务端常把对请求的 ACK 捎在响应首包上，
+  // 两个时间点重合（差值为 0 甚至因时间戳抖动为负），此时如实报 null，
+  // 不能对外显示成「服务端处理 0μs」——那是把「测不出来」说成了「不耗时」
+  if (timing.ttfbMicros !== null && timing.requestAckedMicros !== null) {
+    const think = timing.ttfbMicros - timing.requestAckedMicros;
+    timing.serverThinkMicros = think > 0 ? think : null;
+  }
+
   return timing;
 }
 
@@ -344,12 +439,13 @@ function describeTransaction(
 
   const parts = [`${requestLabel(request)} → ${statusLabel(response)}`];
 
-  // 服务端处理时间 = 等首字节的时间 - 请求送达确认的时间，把网络往返摘出去
-  if (timing.ttfbMicros !== null && timing.requestAckedMicros !== null) {
-    const think = timing.ttfbMicros - timing.requestAckedMicros;
-    if (think > 0) parts.push(`服务端处理 ${formatDuration(think)}`);
+  // 摘掉网络往返之后剩下的才是服务端处理时间。摘不出来时退回「等首字节」，
+  // 而不是什么都不说——这两个分支必须覆盖 ttfb 已知的所有情况，
+  // 否则耗时条画着东西、note 却只字不提，两边自相矛盾
+  if (timing.serverThinkMicros !== null) {
+    parts.push(`服务端处理 ${formatDuration(timing.serverThinkMicros)}`);
   } else if (timing.ttfbMicros !== null) {
-    parts.push(`等首字节 ${formatDuration(timing.ttfbMicros)}`);
+    parts.push(`等首字节 ${formatDuration(timing.ttfbMicros)}（含网络往返）`);
   }
 
   const bytes = response.body?.byteCount ?? 0;
@@ -393,8 +489,9 @@ function describePacketSpan(
 
   if (part === 'headers') return `${who}头的后续部分`;
 
-  if (textFrom !== null && textTo !== null) {
-    return `${who}正文第 ${textFrom}~${textTo} 个字符`;
+  if (textFrom !== null && textTo !== null && textTo > textFrom) {
+    // 内部偏移是 0 基半开区间，展示成 1 基闭区间才对得上「第 N 个字符」的自然读法
+    return `${who}正文第 ${textFrom + 1}~${textTo} 个字符`;
   }
   return `${who}正文的一段`;
 }

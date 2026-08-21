@@ -244,10 +244,17 @@ function renderChip(connection: ConnectionSummary) {
   if (!summary) return null;
 
   const status = summary.statusCode;
-  const tone = status === null ? 'warn' : status >= 500 ? 'bad' : status >= 400 ? 'warn' : 'ok';
-  const text = [summary.firstLine, status === null ? '无响应' : `→ ${status}`]
-    .filter(Boolean)
-    .join(' ');
+  // 「没收到响应」和「收到了但状态行解不出来」是两回事，不能都说成无响应
+  const outcome = !summary.responded ? '无响应' : status === null ? '响应无法解析' : `→ ${status}`;
+  const tone =
+    !summary.responded || status === null
+      ? 'warn'
+      : status >= 500
+        ? 'bad'
+        : status >= 400
+          ? 'warn'
+          : 'ok';
+  const text = [summary.firstLine, outcome].filter(Boolean).join(' ');
 
   return (
     <span className={`chip ${tone}`} title="展开可以看到完整的请求与响应报文">

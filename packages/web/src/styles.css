@@ -713,6 +713,11 @@ pre {
   background: var(--accent);
 }
 
+/* 服务端处理时间拆不出来时，整段「等首字节」用中间色，不冒充成任何一边 */
+.http-timing-seg.mixed {
+  background: linear-gradient(90deg, #46557a, var(--accent));
+}
+
 .http-timing-legend {
   display: flex;
   flex-wrap: wrap;
@@ -737,6 +742,16 @@ pre {
 
 .http-timing-key.server::before {
   background: var(--accent);
+}
+
+.http-timing-key.mixed::before {
+  background: linear-gradient(90deg, #46557a, var(--accent));
+}
+
+.http-timing-hint {
+  margin-top: 6px;
+  font-size: 11.5px;
+  line-height: 1.5;
 }
 
 .http-message {

@@ -53,6 +53,20 @@ describe('协议识别', () => {
     expect(connection.appProtocol).toBe('unknown');
     expect(connection.http).toBeNull();
   });
+
+  it('Redis 内联命令不会被编造成 HTTP 报文', () => {
+    // `GET mykey\r\n` 命中「大写方法 + 空格」，但起始行没有 HTTP 版本 token。
+    // 这条守的是「宁可不给结论，也不能编造结论」
+    const connection = only(analyze(scenarios.redisInlineCommand()).connections);
+
+    expect(connection.appProtocol).toBe('unknown');
+    expect(connection.http).toBeNull();
+    expect(connection.httpSummary).toBeNull();
+    for (const packet of connection.packets) {
+      expect(packet.appSpan).toBeNull();
+      expect(packet.appNote).toBeNull();
+    }
+  });
 });
 
 describe('流重组', () => {
@@ -114,6 +128,26 @@ describe('流重组', () => {
     expect(response?.complete).toBe(false);
     expect(response?.incompleteReason).toContain('没抓到');
   });
+
+  it('抓包从中途开始时不报「流完整」，即使中间一个洞都没有', () => {
+    // 「中间没洞」不等于「完整」——开头缺失同样是不完整，两者要分开表达
+    const connection = only(analyze(scenarios.httpMidStreamRequest()).connections);
+
+    expect(connection.quality.handshakeCaptured).toBe(false);
+    expect(connection.http?.quality.gaps).toEqual([]);
+    expect(connection.http?.quality.clientStartsAtBeginning).toBe(false);
+    expect(connection.http?.quality.serverStartsAtBeginning).toBe(false);
+    expect(connection.http?.quality.clientStreamComplete).toBe(false);
+    expect(connection.http?.quality.serverStreamComplete).toBe(false);
+  });
+
+  it('握手抓全时，即使某个方向一个字节都没传也算起点完整', () => {
+    const connection = only(analyze(scenarios.httpRequestNoResponse()).connections);
+
+    // 服务端一个字节都没回，但我们确实是从连接起点开始看的，不该报成「开头缺失」
+    expect(connection.http?.quality.serverStartsAtBeginning).toBe(true);
+    expect(connection.http?.quality.clientStreamComplete).toBe(true);
+  });
 });
 
 describe('正文', () => {
@@ -136,17 +170,75 @@ describe('正文', () => {
     expect(response?.body?.text).toContain('中国孩子网');
     expect(response?.body?.text).toContain('正文内容');
   });
+
+  it('字符集声明无效时，charset 报的是实际用的那个', () => {
+    // 退回 UTF-8 之后还挂着无效声明的话，界面会告诉用户「这段是 xxx 解出来的」，那是假的。
+    // 声明值本身在 Content-Type 头里仍然看得到，信息不丢
+    const connection = only(analyze(scenarios.httpUnknownCharset()).connections);
+    const { response } = firstTransaction(connection);
+
+    expect(response?.headers.find((h) => h.name === 'Content-Type')?.value).toContain(
+      'x-not-a-real-charset',
+    );
+    expect(response?.body?.charset).toBe('utf-8');
+    expect(response?.body?.text).toBe('中文内容');
+  });
 });
 
 describe('事务与耗时', () => {
-  it('耗时分解把网络往返和服务端处理拆开', () => {
+  it('服务端单独回 ACK 时，网络往返和服务端处理能拆开', () => {
+    const connection = only(analyze(scenarios.httpSeparateAck()).connections);
+    const { timing, note } = firstTransaction(connection);
+
+    expect(timing.requestAckedMicros).toBe(10_000);
+    expect(timing.ttfbMicros).toBe(30_000);
+    expect(timing.serverThinkMicros).toBe(20_000);
+    expect(note).toContain('服务端处理 20.00ms');
+  });
+
+  it('ACK 被捎在响应首包上时，如实说明处理时间测不出来', () => {
+    // 内网快链路 + 延迟 ACK 下这是常态：确认与响应同包，两个时间点重合。
+    // 既不能报「服务端处理 0μs」（把测不出来说成不耗时），也不能干脆不提耗时
     const connection = only(analyze(scenarios.httpSimpleTransaction()).connections);
     const { timing, note } = firstTransaction(connection);
 
-    expect(timing.ttfbMicros).toBe(30_000);
-    expect(timing.requestAckedMicros).not.toBeNull();
-    expect(timing.totalMicros).toBe(30_000);
-    expect(note).toContain('GET /api/order → 200 OK');
+    expect(timing.requestAckedMicros).toBe(timing.ttfbMicros);
+    expect(timing.serverThinkMicros).toBeNull();
+    expect(note).toContain('等首字节 30.00ms（含网络往返）');
+    expect(note).not.toContain('服务端处理');
+  });
+
+  it('乱序时传输耗时不会算成负数', () => {
+    // 流序最末的那段可能最先到达，拿它当「收齐时间」会得到负的传输耗时
+    const connection = only(analyze(scenarios.httpOutOfOrderResponse()).connections);
+    const { timing } = firstTransaction(connection);
+
+    expect(timing.responseTransferMicros).toBeGreaterThanOrEqual(0);
+    expect(timing.totalMicros).toBeGreaterThanOrEqual(timing.ttfbMicros!);
+  });
+
+  it('100 Continue 不占用事务位，真正的响应不会错位', () => {
+    const connection = only(analyze(scenarios.httpExpectContinue()).connections);
+
+    expect(connection.http?.transactions).toHaveLength(1);
+    const transaction = firstTransaction(connection);
+
+    expect(transaction.request?.method).toBe('POST');
+    expect(transaction.response?.statusCode).toBe(200);
+    expect(transaction.informationalResponses.map((m) => m.statusCode)).toEqual([100]);
+    expect(transaction.note).toContain('POST /upload → 200 OK');
+    // 摘要必须给正式响应的状态码，而不是 100
+    expect(connection.httpSummary?.statusCode).toBe(200);
+  });
+
+  it('承载 100 Continue 的包归到同一个事务上', () => {
+    const connection = only(analyze(scenarios.httpExpectContinue()).connections);
+    const spans = connection.packets.filter((packet) => packet.appSpan).map((p) => p.appSpan!);
+
+    expect(spans.length).toBeGreaterThan(0);
+    for (const span of spans) {
+      expect(span.transactionIndex).toBe(1);
+    }
   });
 
   it('请求发出但没有响应时说清楚，而不是留空', () => {
@@ -165,8 +257,16 @@ describe('事务与耗时', () => {
     expect(connection.httpSummary).toEqual({
       transactionCount: 1,
       firstLine: 'GET /api/order',
+      responded: true,
       statusCode: 200,
     });
+  });
+
+  it('摘要区分「没有响应」与「响应解不出来」', () => {
+    const connection = only(analyze(scenarios.httpRequestNoResponse()).connections);
+
+    expect(connection.httpSummary?.responded).toBe(false);
+    expect(connection.httpSummary?.statusCode).toBeNull();
   });
 });
 
@@ -181,6 +281,20 @@ describe('包锚点', () => {
       expect(packet.appSpan!.textTo!).toBeGreaterThan(packet.appSpan!.textFrom!);
       expect(packet.appNote).toMatch(/响应正文第 \d+~\d+ 个字符/);
     }
+  });
+
+  it('注解里的字符区间是 1 基闭区间，不是内部的 0 基偏移', () => {
+    // 内部偏移是 [from, to) 半开 0 基，对外必须写成 from+1 ~ to，
+    // 否则「第 0 个字符」既不是人话，读起来还整体差一位
+    const connection = only(analyze(scenarios.httpOutOfOrderResponse()).connections);
+    const bodyPackets = connection.packets.filter((packet) => packet.appSpan?.part === 'body');
+
+    expect(bodyPackets.length).toBeGreaterThan(0);
+    for (const packet of bodyPackets) {
+      const { textFrom, textTo } = packet.appSpan!;
+      expect(packet.appNote).toBe(`响应正文第 ${textFrom! + 1}~${textTo} 个字符`);
+    }
+    expect(bodyPackets.some((packet) => packet.appNote?.includes('第 0~'))).toBe(false);
   });
 
   it('区间按流序首尾相接，覆盖整个正文', () => {

@@ -295,6 +295,99 @@ export function httpRequestNoResponse(): Uint8Array {
   });
 }
 
+/**
+ * 服务端先单独回一个 ACK，隔一会儿才发响应。
+ * 只有这种形态才能把「网络往返」和「服务端处理」分开测。
+ */
+export function httpSeparateAck(): Uint8Array {
+  const body = encoder.encode('{"ok":true}');
+  return buildFlow({
+    steps: [
+      { from: 'client', at: 2_000, data: REQUEST },
+      { from: 'server', at: 12_000, flags: ['ACK'] },
+      {
+        from: 'server',
+        at: 32_000,
+        data: response(['Content-Type: application/json', `Content-Length: ${body.length}`], body),
+      },
+    ],
+  });
+}
+
+/**
+ * `Expect: 100-continue`：正式响应之前先来一条 100 Continue。
+ * 按下标硬配会让 100 顶掉真正的响应，后面全部错位一格。
+ */
+export function httpExpectContinue(): Uint8Array {
+  const payload = encoder.encode('name=tcpview');
+  const request = encoder.encode(
+    `POST /upload HTTP/1.1\r\nHost: api.internal\r\nExpect: 100-continue\r\nContent-Length: ${payload.length}\r\n\r\n`,
+  );
+  const full = new Uint8Array(request.length + payload.length);
+  full.set(request, 0);
+  full.set(payload, request.length);
+
+  const body = encoder.encode('{"id":7}');
+  return buildFlow({
+    steps: [
+      { from: 'client', at: 2_000, data: full },
+      { from: 'server', at: 20_000, data: 'HTTP/1.1 100 Continue\r\n\r\n' },
+      {
+        from: 'server',
+        at: 60_000,
+        data: response(['Content-Type: application/json', `Content-Length: ${body.length}`], body),
+      },
+    ],
+  });
+}
+
+/**
+ * Redis 内联命令。`GET mykey\r\n` 命中「大写方法 + 空格」，
+ * 但它不是 HTTP——绝不能编出一条假报文来。
+ */
+export function redisInlineCommand(): Uint8Array {
+  return buildFlow({
+    steps: [
+      { from: 'client', at: 2_000, data: 'GET mykey\r\n' },
+      { from: 'server', at: 3_000, data: '$5\r\nhello\r\n' },
+    ],
+  });
+}
+
+/** 服务器声明了一个 TextDecoder 不认识的字符集 */
+export function httpUnknownCharset(): Uint8Array {
+  const body = encoder.encode('中文内容');
+  return buildFlow({
+    steps: [
+      { from: 'client', at: 2_000, data: REQUEST },
+      {
+        from: 'server',
+        at: 32_000,
+        data: response(
+          ['Content-Type: text/plain; charset=x-not-a-real-charset', `Content-Length: ${body.length}`],
+          body,
+        ),
+      },
+    ],
+  });
+}
+
+/** 抓包从连接中途开始，但恰好落在一条完整请求的行首上 */
+export function httpMidStreamRequest(): Uint8Array {
+  const body = encoder.encode('done');
+  return buildFlow({
+    handshake: false,
+    steps: [
+      { from: 'client', at: 2_000, data: REQUEST },
+      {
+        from: 'server',
+        at: 32_000,
+        data: response(['Content-Type: text/plain', `Content-Length: ${body.length}`], body),
+      },
+    ],
+  });
+}
+
 export const httpScenarios = {
   httpSimpleTransaction,
   httpOutOfOrderResponse,
@@ -304,4 +397,9 @@ export const httpScenarios = {
   httpGapInStream,
   httpMidStreamCapture,
   httpRequestNoResponse,
+  httpSeparateAck,
+  httpExpectContinue,
+  redisInlineCommand,
+  httpUnknownCharset,
+  httpMidStreamRequest,
 };

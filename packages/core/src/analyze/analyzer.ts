@@ -17,8 +17,10 @@ export interface AnalyzeOptions {
 /**
  * 单趟流式分析：解码 → 喂 host 注册表 → 喂连接跟踪器 → 丢弃载荷。
  *
- * 载荷只在这一趟里短暂持有，用于嗅探 DNS / SNI / HTTP Host，之后立即释放，
- * 因此内存占用与连接数相关而与文件大小无关。
+ * 大部分载荷只在这一趟里短暂持有（嗅探 DNS / SNI / HTTP Host）用完即弃，
+ * 但**被识别为明文 HTTP 的连接会保留载荷**用于还原报文，上限见 connections.ts 的
+ * SNIFF_BUDGET / HTTP_RETAIN_CAP。保留量天然被文件里的实际载荷总量封顶，
+ * 实测常驻内存约为抓包文件的 1.7 倍，其中大头是解码后的正文字符串（UTF-16，双倍字节）。
  */
 export function analyze(bytes: Uint8Array, options: AnalyzeOptions = {}): AnalysisResult {
   const maxPackets = options.maxPackets ?? 2_000_000;

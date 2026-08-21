@@ -72,7 +72,9 @@ export function reassemble(
       pieces: [],
       gaps: [],
       duplicatesDropped: 0,
-      startsAtStreamBeginning: false,
+      // 一个字节都没传。抓到握手就说明这是事实而不是漏抓了开头，
+      // 空流同样有「起点完不完整」之分，不能一律报 false
+      startsAtStreamBeginning: options.handshakeCaptured,
       truncated: false,
     };
   }

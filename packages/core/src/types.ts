@@ -189,10 +189,17 @@ export interface HttpMessage {
   /** 起始行 + 头部 + 空行的总字节数 */
   headerByteCount: number;
   body: HttpBody | null;
-  /** 承载这条消息第一个 / 最后一个字节的包序号（按流序，不是抓包序） */
+  /** 承载这条消息第一个字节的包序号。按流序取——乱序时它不是抓包序里的第一个 */
   firstPacketIndex: number;
+  /** 承载这条消息最后一个字节的包序号。同样按流序取 */
   lastPacketIndex: number;
+  /** 消息第一个字节到达的时间。TTFB 的基准 */
   firstTsMicros: number;
+  /**
+   * 消息收齐的时间 = 所有承载包里**最晚**的那个的时间。
+   * 不能取 lastPacketIndex 的时间：乱序时流序最末的那段可能最先到达，
+   * 那样算出来的传输耗时会是负数。
+   */
   lastTsMicros: number;
   /** 消息是否完整。流里有洞、抓包提前结束、载荷保留触顶都会置 false */
   complete: boolean;
@@ -206,12 +213,20 @@ export interface HttpMessage {
 export interface HttpTiming {
   /** 请求最后一字节 → 服务端确认收到。约等于一个 RTT，反映链路 */
   requestAckedMicros: number | null;
-  /** 请求最后一字节 → 响应第一字节。减去 RTT 就是服务端处理时间 */
+  /** 请求最后一字节 → 响应第一字节。里面既含网络往返也含服务端处理 */
   ttfbMicros: number | null;
   /** 响应第一字节 → 最后一字节。反映响应体传输 */
   responseTransferMicros: number | null;
   /** 请求最后一字节 → 响应最后一字节 */
   totalMicros: number | null;
+  /**
+   * 服务端处理耗时 = TTFB − 请求送达确认，把网络往返摘掉后剩下的部分。
+   *
+   * 为 null 表示**分不出来**：服务端把对请求的 ACK 捎在响应首包上时（内网快链路 +
+   * 延迟 ACK 下是常态），两个时间点重合，处理时间无法从抓包里单独测出。
+   * 界面必须按 null 如实说明，不能显示成「服务端处理 0μs」。
+   */
+  serverThinkMicros: number | null;
 }
 
 export interface HttpTransaction {
@@ -219,15 +234,26 @@ export interface HttpTransaction {
   index: number;
   request: HttpMessage | null;
   response: HttpMessage | null;
+  /**
+   * 正式响应之前的 1xx 中间响应（`100 Continue` 等）。
+   * 它们不是独立事务——把它们当成响应去配对，会让真正的响应错位成「没抓到请求」。
+   */
+  informationalResponses: HttpMessage[];
   timing: HttpTiming;
   /** 人话结论，例如「GET / → 200 OK，服务端处理 7.5ms」 */
   note: string;
 }
 
 export interface HttpQuality {
-  /** 客户端 / 服务端方向的流是否完整（无洞、从流起点开始） */
+  /** 该方向的流是否完整：中间没有空洞，且确实是从连接起点开始的 */
   clientStreamComplete: boolean;
   serverStreamComplete: boolean;
+  /**
+   * 流是否从连接真正的起点开始。false 说明抓包开始时连接已经在传输了，
+   * 开头的报文可能整条错过——这与「中间有空洞」是两回事，界面要分开说。
+   */
+  clientStartsAtBeginning: boolean;
+  serverStartsAtBeginning: boolean;
   /** 流里没被抓到的区间 */
   gaps: { direction: Direction; from: number; to: number }[];
   /** 被判定为重复而丢弃的段数 */
@@ -246,7 +272,9 @@ export interface HttpSummary {
   transactionCount: number;
   /** 第一个事务的请求行，例如 `GET /` */
   firstLine: string | null;
-  /** 第一个事务的响应状态码 */
+  /** 第一个事务到底有没有收到响应。用来和「收到了但状态行解不出来」区分开 */
+  responded: boolean;
+  /** 第一个事务的响应状态码。没有响应、或状态行解不出来时为 null */
   statusCode: number | null;
 }
 

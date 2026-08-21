@@ -1,5 +1,11 @@
 import { Fragment } from 'react';
-import type { AppSpan, Connection, ConnectionPacket, HttpTransaction } from '@tcpview/core';
+import type {
+  AppSpan,
+  Connection,
+  ConnectionPacket,
+  HttpMessage,
+  HttpTransaction,
+} from '@tcpview/core';
 import { anomalyLabel, formatDuration } from '@tcpview/core';
 
 const HEADER_HEIGHT = 56;
@@ -213,14 +219,39 @@ function badgeContent(
   if (span.duplicate) return { text: '重复', tone: 'dup' };
 
   if (span.part === 'start-line' || span.part === 'mixed') {
+    const message = messageAt(transaction, span);
     if (span.messageKind === 'request') {
-      return { text: transaction?.request?.method ?? '请求', tone: 'start' };
+      return { text: message?.method ?? '请求', tone: 'start' };
     }
-    const status = transaction?.response?.statusCode;
+    const status = message?.statusCode;
     return { text: status === undefined ? '响应' : String(status), tone: 'start' };
   }
 
   return { text: '…续', tone: 'cont' };
+}
+
+/**
+ * 找出这个包到底承载的是事务里的哪一条消息。
+ *
+ * 一个事务可能有多条响应——`100 Continue` 之类的中间响应和正式响应同属一个事务。
+ * 直接取 `transaction.response` 的话，承载 100 Continue 的那一行会被标成「200」，
+ * 和它自己那句「100 Continue 的响应头在这个包里」当场打架。
+ */
+function messageAt(transaction: HttpTransaction | null, span: AppSpan): HttpMessage | null {
+  if (!transaction) return null;
+
+  const candidates =
+    span.messageKind === 'request'
+      ? [transaction.request]
+      : [...transaction.informationalResponses, transaction.response];
+
+  for (const message of candidates) {
+    if (message && span.streamFrom >= message.streamStart && span.streamFrom < message.streamEnd) {
+      return message;
+    }
+  }
+  // 落在任何消息区间之外（重传等）时退回第一条，至少方向是对的
+  return candidates.find((message): message is HttpMessage => message != null) ?? null;
 }
 
 function appNoteTone(span: AppSpan | null): string {

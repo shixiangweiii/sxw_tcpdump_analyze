@@ -63,17 +63,53 @@ export function sniffAppProtocol(
   return looksLikeStatusLine(bytes, 0) ? 'http1' : null;
 }
 
+/** 起始行末尾（请求）或开头（响应）的版本 token */
+const HTTP_VERSION = /^HTTP\/\d\.\d$/;
+
 function looksLikeRequestLine(bytes: Uint8Array, offset: number): boolean {
-  for (const method of HTTP_METHODS) {
-    if (matchesAscii(bytes, offset, method) && bytes[offset + method.length] === 0x20) {
-      return true;
-    }
-  }
-  return false;
+  const method = HTTP_METHODS.find(
+    (candidate) =>
+      matchesAscii(bytes, offset, candidate) && bytes[offset + candidate.length] === 0x20,
+  );
+  if (!method) return false;
+
+  const lineEnd = indexOfCrLf(bytes, offset);
+  // 这一行还没收全，只能先按「可能是」放过，留给解析阶段定夺
+  if (lineEnd < 0) return true;
+  return isRequestLine(decodeLatin1(bytes.subarray(offset, lineEnd)));
 }
 
 function looksLikeStatusLine(bytes: Uint8Array, offset: number): boolean {
-  return matchesAscii(bytes, offset, 'HTTP/1.');
+  if (!matchesAscii(bytes, offset, 'HTTP/1.')) return false;
+
+  const lineEnd = indexOfCrLf(bytes, offset);
+  if (lineEnd < 0) return true;
+  return isStatusLine(decodeLatin1(bytes.subarray(offset, lineEnd)));
+}
+
+/**
+ * 起始行必须真的长得像 HTTP，否则宁可一条消息都不报。
+ *
+ * 只看「大写方法 + 空格」是不够的：Redis 内联命令 `GET mykey\r\n` 完全命中，
+ * 会被当成请求行；而响应方向从流起点解析时**根本没有校验**，纯二进制也能解出一条
+ * httpVersion 被填成 HTTP/1.1 的假消息。对「自动给结论」的工具来说，
+ * 编造结论比不给结论更有害，所以这里宁可漏报。
+ */
+function isRequestLine(line: string): boolean {
+  const parts = line.split(' ');
+  if (parts.length < 3) return false;
+  if (!(HTTP_METHODS as readonly string[]).includes(parts[0]!)) return false;
+  return HTTP_VERSION.test(parts[parts.length - 1]!);
+}
+
+function isStatusLine(line: string): boolean {
+  const parts = line.split(' ');
+  if (parts.length < 2) return false;
+  return HTTP_VERSION.test(parts[0]!) && /^\d{3}$/.test(parts[1]!);
+}
+
+function isValidStartLine(kind: 'request' | 'response', line: string): boolean {
+  return kind === 'request' ? isRequestLine(line) : isStatusLine(line);
 }
 
 function matchesAscii(bytes: Uint8Array, offset: number, text: string): boolean {
@@ -175,14 +211,18 @@ function parseOne(
 ): ParsedMessage | null {
   const headerEnd = findHeaderEnd(bytes, start);
   if (headerEnd < 0) {
-    // 头部还没收完抓包就断了：报告一条不完整的消息，而不是假装什么都没发生
+    // 头部还没收完抓包就断了：报告一条不完整的消息，而不是假装什么都没发生。
+    // 但起始行仍然必须校验通过——否则这里就成了编造假报文的入口
     if (bytes.length - start < 4) return null;
     const partial = decodeUtf8(bytes.subarray(start, Math.min(bytes.length, start + 4096)));
     const firstLine = partial.split(/\r?\n/)[0] ?? '';
-    if (!firstLine) return null;
+    if (!isValidStartLine(kind, firstLine)) return null;
+
+    const shape = emptyShape(kind, firstLine);
+    applyStartLine(shape, kind, firstLine);
 
     return {
-      ...emptyShape(kind, firstLine),
+      ...shape,
       streamStart: start,
       streamEnd: bytes.length,
       headerByteCount: bytes.length - start,
@@ -200,6 +240,8 @@ function parseOne(
   const headerText = decodeUtf8(bytes.subarray(start, headerEnd));
   const lines = unfold(headerText.split('\r\n'));
   const startLine = lines[0] ?? '';
+  if (!isValidStartLine(kind, startLine)) return null;
+
   const headers = parseHeaders(lines.slice(1));
 
   const base = {
@@ -208,18 +250,7 @@ function parseOne(
     streamStart: start,
     headerByteCount: bodyStart - start,
   };
-
-  if (kind === 'request') {
-    const [method, target, version] = splitStartLine(startLine, 3);
-    base.method = method;
-    base.target = target;
-    base.httpVersion = version ?? 'HTTP/1.1';
-  } else {
-    const [version, status, ...reason] = splitStartLine(startLine, 3);
-    base.httpVersion = version ?? 'HTTP/1.1';
-    base.statusCode = Number.parseInt(status ?? '', 10) || undefined;
-    base.reasonPhrase = reason.join(' ') || undefined;
-  }
+  applyStartLine(base, kind, startLine);
 
   const framing = decideFraming(kind, base.statusCode, requestMethod, headers);
   const bodyResult = readBody(bytes, bodyStart, framing, headers, options);
@@ -244,11 +275,14 @@ function parseOne(
   };
 }
 
+type MessageShape = ReturnType<typeof emptyShape>;
+
 function emptyShape(kind: 'request' | 'response', startLine: string) {
   return {
     kind,
     startLine,
-    httpVersion: 'HTTP/1.1',
+    // 不预置默认版本：填了就是编造。只能由 applyStartLine 从真实起始行里取
+    httpVersion: '',
     headers: [] as HttpHeader[],
     body: null as HttpBody | null,
     streamStart: 0,
@@ -263,13 +297,35 @@ function emptyShape(kind: 'request' | 'response', startLine: string) {
   };
 }
 
+/** 把起始行拆进消息里。调用前起始行必须已经过 isValidStartLine 校验 */
+function applyStartLine(shape: MessageShape, kind: 'request' | 'response', startLine: string): void {
+  if (kind === 'request') {
+    const [method, target, version] = splitStartLine(startLine, 3);
+    shape.method = method;
+    shape.target = target;
+    shape.httpVersion = version ?? '';
+    return;
+  }
+
+  const [version, status, ...reason] = splitStartLine(startLine, 3);
+  shape.httpVersion = version ?? '';
+  shape.statusCode = Number.parseInt(status ?? '', 10) || undefined;
+  shape.reasonPhrase = reason.join(' ') || undefined;
+}
+
 function splitStartLine(line: string, limit: number): string[] {
   const parts = line.split(' ');
   if (parts.length <= limit) return parts;
   return [...parts.slice(0, limit - 1), parts.slice(limit - 1).join(' ')];
 }
 
-/** 头部续行（obs-fold）：以空格或制表符开头的行是上一行的延续 */
+/**
+ * 头部续行（obs-fold）：以空格或制表符开头的行是上一行的延续。
+ *
+ * `out.length > 1` 是有意的，别改成 `>= 1`：lines[0] 是起始行，续行只可能属于**头部**。
+ * 放宽到 `>= 1` 后，畸形的 `GET / HTTP/1.1\r\n  bogus\r\n` 会把 bogus 并进起始行，
+ * 连带污染 method 与 target。现在这样它会被当普通行丢弃。
+ */
 function unfold(lines: string[]): string[] {
   const out: string[] = [];
   for (const line of lines) {
@@ -502,11 +558,11 @@ function buildBody(framing: HttpBodyFraming, raw: Uint8Array, headers: HttpHeade
     return body;
   }
 
-  const charset = detectCharset(contentType, raw);
+  const { decoder, charset } = resolveCharset(detectCharset(contentType, raw));
   const capped = raw.length > BODY_TEXT_CAP ? raw.subarray(0, BODY_TEXT_CAP) : raw;
 
   body.charset = charset;
-  body.text = decodeWith(charset, capped);
+  body.text = decoder.decode(capped);
   body.truncated = capped.length < raw.length;
   return body;
 }
@@ -538,12 +594,18 @@ function detectCharset(contentType: string, raw: Uint8Array): string {
   return 'utf-8';
 }
 
-function decodeWith(charset: string, bytes: Uint8Array): string {
+/**
+ * 把「声明的字符集」换成一个真能用的解码器，并回报**实际用的**是哪个。
+ *
+ * TextDecoder 遇到不认识的名字会抛异常。此时退回 UTF-8，charset 字段就必须写 utf-8，
+ * 不能继续挂着那个无效声明——界面会照着它显示「这段是 xxx 解码的」，那是假的。
+ * 服务器原本声明了什么，在 Content-Type 头里仍然看得到，信息不会丢。
+ */
+export function resolveCharset(declared: string): { decoder: TextDecoder; charset: string } {
   try {
-    return new TextDecoder(charset).decode(bytes);
+    return { decoder: new TextDecoder(declared), charset: declared };
   } catch {
-    // 未知字符集（TextDecoder 会抛）时退回 UTF-8，charset 字段仍保留原始声明供排查
-    return decodeUtf8(bytes);
+    return { decoder: new TextDecoder('utf-8'), charset: 'utf-8' };
   }
 }
 
