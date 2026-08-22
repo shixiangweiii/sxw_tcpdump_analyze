@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import type { CSSProperties } from 'react';
 import type {
   AppSpan,
   Connection,
@@ -16,8 +17,13 @@ const LEFT_LANE = 140;
 const RIGHT_LANE = 470;
 const BADGE_X = RIGHT_LANE + 38;
 const BADGE_WIDTH = 54;
-// 演示模式的飞行距离，与 styles.css 里 demo-fly-right 的 330px 必须一起改
-const FLY_DISTANCE = RIGHT_LANE - LEFT_LANE;
+/**
+ * 演示模式飞行动画的距离与时长。这里是唯一事实来源：
+ * 距离/时长以 CSS 变量传给 demo-fly-right（keyframes 里不写死数值），
+ * ConnectionWorkbench 的兜底定时器也用同一个 FLY_MS。
+ */
+export const FLY_DISTANCE = RIGHT_LANE - LEFT_LANE;
+export const FLY_MS = 600;
 
 /** 演示模式的渐进视图：已落笔的行数 + 正在飞行的行下标 */
 export interface DemoView {
@@ -62,31 +68,37 @@ export function LadderDiagram({
   const canvasWidth = noteX + 570;
 
   const visiblePackets = demo ? connection.packets.slice(0, demo.playedCount) : connection.packets;
-  // 开局至少留 3 行高度：只剩两条生命线时也还是一张「等待落笔」的图
-  const rowCount = demo ? Math.max(demo.playedCount, 3) : connection.packets.length;
-  const bodyHeight = rowCount * rowHeight + 16;
 
   const flyingIndex = demo?.flyingIndex ?? null;
   const flyingPacket = flyingIndex !== null ? (connection.packets[flyingIndex] ?? null) : null;
 
+  // 开局至少留 3 行高度：只剩两条生命线时也还是一张「等待落笔」的图。
+  // 飞行中的那一行还没落笔，但图标画在它的位置上，画布必须为它多留一行——
+  // SVG 根元素默认 overflow:hidden，落在画布外的图标会被整个裁掉，一帧都看不见
+  const rowCount = demo
+    ? Math.max(demo.playedCount + (flyingIndex !== null ? 1 : 0), 3)
+    : connection.packets.length;
+  const bodyHeight = rowCount * rowHeight + 16;
+
   const ladderRef = useRef<HTMLDivElement>(null);
   const demoActive = demo !== null;
-  const playedCount = demo?.playedCount ?? 0;
+  // 「当前行」：飞行中是正在飞的那一行，落笔后是同一个下标，视线不用跟着跳
+  const focusRow = flyingIndex ?? (demo?.playedCount ?? 0) - 1;
 
   /**
-   * 演示每落一笔就把新行滚进视野。直接算 .ladder 自己的 scrollTop 而不用
+   * 演示每推进一步就把当前行滚进视野。直接算 .ladder 自己的 scrollTop 而不用
    * scrollIntoView：后者会连带滚动外层容器（嵌套滚动容器上还有静默失效的前科）。
    */
   useEffect(() => {
     const el = ladderRef.current;
     if (!demoActive || !el) return;
-    if (playedCount === 0) {
+    if (focusRow < 0) {
       el.scrollTop = 0;
       return;
     }
-    const rowY = HEADER_HEIGHT + (playedCount - 1) * rowHeight + rowHeight / 2;
+    const rowY = HEADER_HEIGHT + focusRow * rowHeight + rowHeight / 2;
     el.scrollTop = Math.max(0, rowY - el.clientHeight / 2);
-  }, [demoActive, playedCount, rowHeight]);
+  }, [demoActive, focusRow, rowHeight]);
 
   return (
     <div className="ladder" ref={ladderRef}>
@@ -133,7 +145,7 @@ export function LadderDiagram({
             selected={selectedPacketIndex === packet.packetIndex}
             // 演示中选中只由播放驱动，行不给点；onSelect 传 undefined 即不响应
             onSelect={demo ? undefined : onSelectPacket}
-            demoEnter={demo !== null}
+            demoEnter={demo !== null && index === demo.playedCount - 1}
           />
         ))}
 
@@ -153,8 +165,11 @@ export function LadderDiagram({
  * 演示模式的飞行包：一个带标志位的小图标从发送端飞到接收端。
  *
  * 外层 g 用 SVG transform 属性定位到行高所在位置（起点在左侧泳道），
- * 内层 g 用 CSS keyframes 平移 FLY_DISTANCE——两套 transform 互不干扰，
- * 所以 keyframes 可以写死距离、s2c 直接 reverse 同一条动画。
+ * 内层 g 用 CSS keyframes 平移 --fly-distance——两套 transform 互不干扰，
+ * 所以 keyframes 只认变量、s2c 直接 reverse 同一条动画。
+ *
+ * 图标画在「行进方向」那一侧：c2s 从起点往右画，s2c 往左画。
+ * 否则 s2c 时整个图标压在右边的徽章与注解列上，落点也越过客户端泳道。
  */
 function FlyingPacket({
   packet,
@@ -167,12 +182,22 @@ function FlyingPacket({
 }) {
   const label = packet.flags.join('·');
   const width = Math.max(52, label.length * 9 + 22);
+  const boxX = packet.direction === 'c2s' ? -6 : 6 - width;
 
   return (
     <g transform={`translate(${LEFT_LANE}, ${y})`}>
-      <g className={`demo-fly ${packet.direction}`} onAnimationEnd={onEnd}>
-        <rect x={-6} y={-13} width={width} height={26} rx={6} className="demo-packet-box" />
-        <text x={width / 2 - 6} y={4.5} className="demo-packet-text" textAnchor="middle">
+      <g
+        className={`demo-fly ${packet.direction}`}
+        style={
+          {
+            '--fly-distance': `${FLY_DISTANCE}px`,
+            '--fly-duration': `${FLY_MS}ms`,
+          } as CSSProperties
+        }
+        onAnimationEnd={onEnd}
+      >
+        <rect x={boxX} y={-13} width={width} height={26} rx={6} className="demo-packet-box" />
+        <text x={boxX + width / 2} y={4.5} className="demo-packet-text" textAnchor="middle">
           {label}
         </text>
       </g>

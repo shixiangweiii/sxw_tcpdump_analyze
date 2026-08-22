@@ -682,7 +682,8 @@ pre {
 
 /*
  * 演示模式的飞行包：从左侧泳道平移到右侧泳道。
- * 330px = RIGHT_LANE − LEFT_LANE（LadderDiagram 的 FLY_DISTANCE），改泳道位置时两处同步。
+ * 距离与时长都由 LadderDiagram 通过 --fly-distance / --fly-duration 传进来
+ * （分别是 RIGHT_LANE − LEFT_LANE 和 FLY_MS），这里不写死数值，改泳道位置不用动 CSS。
  * s2c 方向直接 reverse 同一条动画，从服务端飞回客户端。
  */
 @keyframes demo-fly-right {
@@ -690,16 +691,16 @@ pre {
     transform: translateX(0);
   }
   to {
-    transform: translateX(330px);
+    transform: translateX(var(--fly-distance));
   }
 }
 
 .demo-fly.c2s {
-  animation: demo-fly-right 600ms ease-in-out forwards;
+  animation: demo-fly-right var(--fly-duration) ease-in-out forwards;
 }
 
 .demo-fly.s2c {
-  animation: demo-fly-right 600ms ease-in-out forwards reverse;
+  animation: demo-fly-right var(--fly-duration) ease-in-out forwards reverse;
 }
 
 .demo-packet-box {

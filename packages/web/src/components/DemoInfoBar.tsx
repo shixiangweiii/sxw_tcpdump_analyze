@@ -20,8 +20,10 @@ export function DemoInfoBar({ connection, playedCount }: Props) {
   const total = connection.packets.length;
   const packet = playedCount > 0 ? (connection.packets[playedCount - 1] ?? null) : null;
 
+  // role="status"：梯形图那边只有一句静态 aria-label，屏幕阅读器跟不上单步播放；
+  // 这条信息条本来就是每一步的文字等价物，声明成状态区就能被逐步读出来
   return (
-    <div className="demo-info">
+    <div className="demo-info" role="status">
       {packet === null ? (
         <div className="demo-info-note">
           已就绪：点击「播放下一包」开始逐包重放，这条连接共 {total} 个包。

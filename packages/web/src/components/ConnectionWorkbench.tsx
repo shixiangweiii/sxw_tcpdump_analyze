@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Connection } from '@tcpview/core';
 import { formatBytes, formatDuration, outcomeLabel } from '@tcpview/core';
 import { DemoInfoBar } from './DemoInfoBar';
 import { HttpTransactions } from './HttpTransactions';
-import { LadderDiagram } from './LadderDiagram';
+import { FLY_MS, LadderDiagram } from './LadderDiagram';
 
 interface Props {
   connection: Connection;
@@ -45,14 +45,11 @@ export function ConnectionWorkbench({
   onNavigate,
   onClose,
 }: Props) {
+  // 换一条连接时这些状态都要复位，靠的是 App 里的 key（整块重挂载），不是 effect：
+  // effect 在 paint 之后才跑，会先漏出一帧「新连接 + 旧演示进度」的错图
   const [selectedPacket, setSelectedPacket] = useState<number | null>(null);
   const [demo, setDemo] = useState(DEMO_OFF);
-
-  // 换一条连接时上一条的选中项和演示进度必须清掉，否则会高亮/播放到不相干的位置
-  useEffect(() => {
-    setSelectedPacket(null);
-    setDemo(DEMO_OFF);
-  }, [connection.id]);
+  const panesRef = useRef<HTMLDivElement>(null);
 
   const packetCount = connection.packets.length;
 
@@ -60,6 +57,9 @@ export function ConnectionWorkbench({
     setDemo({ active: true, playedCount: 0, flyingIndex: null });
     // 进演示时清掉静态模式留下的选中，退出后不让旧高亮凭空回来
     setSelectedPacket(null);
+    // 演示的主视图是梯形图，先把它拉回视野：窄屏堆叠时，之前点包看正文
+    // 很可能已经把整栏滚下去了，而「动态演示」按钮在吸顶的头部随手就能点到
+    panesRef.current?.scrollTo({ top: 0 });
   }, []);
 
   // 重播就是从头再进一次
@@ -87,6 +87,18 @@ export function ConnectionWorkbench({
     setDemo(DEMO_OFF);
     setSelectedPacket(null);
   }, []);
+
+  /**
+   * 落笔的兜底：animationend 是唯一的落笔信号，而它并不保证会来——页面在后台时
+   * 浏览器不做渲染更新（实测动画早已 finished、事件却不派发），用户样式表或扩展
+   * 把动画整个关掉时更是永远不来。播放键的禁用只看 flyingIndex，事件不来就永久卡死。
+   * 定时器和事件抢同一个 handleFlightEnd，函数式更新自带幂等，谁先到都不会重复落笔。
+   */
+  useEffect(() => {
+    if (demo.flyingIndex === null) return;
+    const timer = window.setTimeout(handleFlightEnd, FLY_MS + 200);
+    return () => window.clearTimeout(timer);
+  }, [demo.flyingIndex, handleFlightEnd]);
 
   // 演示中选中 = 最后落笔的那个包；静态模式回到用户手点的那套逻辑
   const demoSelectedPacket =
@@ -160,7 +172,11 @@ export function ConnectionWorkbench({
               onClick={stepDemo}
               disabled={demo.flyingIndex !== null || demo.playedCount >= packetCount}
               title={
-                demo.playedCount >= packetCount ? '已播完，可重播或退出' : '播放下一个包'
+                demo.flyingIndex !== null
+                  ? '飞行中…'
+                  : demo.playedCount >= packetCount
+                    ? '已播完，可重播或退出'
+                    : '播放下一个包'
               }
             >
               ▶ 播放下一包
@@ -210,12 +226,7 @@ export function ConnectionWorkbench({
 
       {error && <div className="alert error workbench-error">{error}</div>}
 
-      {/*
-        key 让两栏在换连接时整体重挂载。少了它，滚动位置会跟着 DOM 留在原地——
-        翻到下一条连接，梯形图却停在上一条滚到的几百像素处，开头的握手直接看不见。
-        顺带把报文栏的折叠状态也复位到第一个事务。
-      */}
-      <div className={`workbench-panes ${loading ? 'loading' : ''}`} key={connection.id}>
+      <div className={`workbench-panes ${loading ? 'loading' : ''}`} ref={panesRef}>
         <section className="workbench-pane pane-ladder">
           <LadderDiagram
             connection={connection}
@@ -236,7 +247,12 @@ export function ConnectionWorkbench({
           <QualityNotes connection={connection} />
 
           {connection.http ? (
-            <HttpTransactions http={connection.http} selectedSpan={selectedSpan} />
+            <HttpTransactions
+              http={connection.http}
+              selectedSpan={selectedSpan}
+              // 演示时正文联动不许惊动外层滚动容器，否则梯形图会被滚出视野
+              confineScroll={demo.active}
+            />
           ) : (
             <NonHttpNotice connection={connection} />
           )}

@@ -6,6 +6,8 @@ interface Props {
   http: HttpAnalysis;
   /** 当前在梯形图上选中的包，用来高亮它对应的报文区间 */
   selectedSpan: AppSpan | null;
+  /** 把联动滚动限制在报文栏内部，不惊动外层容器（演示模式用，理由见 scrollIntoViewWithin） */
+  confineScroll: boolean;
 }
 
 /**
@@ -17,7 +19,7 @@ interface Props {
  * 多事务时按手风琴折叠，只展开一条。左右分栏之后翻找的距离就是这一栏的滚动距离，
  * 十几个事务全摊开的话，点了梯形图还得在这一栏里再找一遍，等于没解决问题。
  */
-export function HttpTransactions({ http, selectedSpan }: Props) {
+export function HttpTransactions({ http, selectedSpan, confineScroll }: Props) {
   const foldable = http.transactions.length > 1;
   const [openIndex, setOpenIndex] = useState<number | null>(
     http.transactions[0]?.index ?? null,
@@ -43,6 +45,7 @@ export function HttpTransactions({ http, selectedSpan }: Props) {
           selectedSpan={
             selectedSpan?.transactionIndex === transaction.index ? selectedSpan : null
           }
+          confineScroll={confineScroll}
         />
       ))}
     </div>
@@ -102,12 +105,14 @@ function TransactionCard({
   open,
   onToggle,
   selectedSpan,
+  confineScroll,
 }: {
   transaction: HttpTransaction;
   foldable: boolean;
   open: boolean;
   onToggle: () => void;
   selectedSpan: AppSpan | null;
+  confineScroll: boolean;
 }) {
   const head = (
     <>
@@ -135,16 +140,23 @@ function TransactionCard({
             <MessageBlock
               message={transaction.request}
               span={selectedSpan?.messageKind === 'request' ? selectedSpan : null}
+              confineScroll={confineScroll}
             />
           )}
           {/* 100 Continue 之类的中间响应。不算独立事务，但抓包里确实有，不能藏起来 */}
           {transaction.informationalResponses.map((message, i) => (
-            <MessageBlock key={`info-${i}`} message={message} span={null} />
+            <MessageBlock
+              key={`info-${i}`}
+              message={message}
+              span={null}
+              confineScroll={confineScroll}
+            />
           ))}
           {transaction.response ? (
             <MessageBlock
               message={transaction.response}
               span={selectedSpan?.messageKind === 'response' ? selectedSpan : null}
+              confineScroll={confineScroll}
             />
           ) : (
             <div className="http-message empty">抓包里没有这个请求的响应。</div>
@@ -216,7 +228,15 @@ function TimingBar({ timing }: { timing: HttpTiming }) {
   );
 }
 
-function MessageBlock({ message, span }: { message: HttpMessage; span: AppSpan | null }) {
+function MessageBlock({
+  message,
+  span,
+  confineScroll,
+}: {
+  message: HttpMessage;
+  span: AppSpan | null;
+  confineScroll: boolean;
+}) {
   const isRequest = message.kind === 'request';
   const blockRef = useRef<HTMLDivElement>(null);
 
@@ -224,6 +244,9 @@ function MessageBlock({ message, span }: { message: HttpMessage; span: AppSpan |
    * 把选中包对应的位置滚进视野。少了这一步，左右分栏也只解决一半问题：
    * 正文自己还有一个 420px 的滚动框，高亮多半落在框外，仍然要手动找。
    * scrollIntoView 会把所有可滚动祖先一起滚到位，正文框和整栏一次搞定。
+   *
+   * 演示模式（confineScroll）下改走受限版本：那时「所有祖先」里包含窄屏的整页滚动容器，
+   * 一滚就把左边的梯形图带出视野，而人正看着它。找不到报文栏边界时干脆不滚。
    *
    * 落点优先取高亮块；承载起始行或头部的包没有正文高亮（textFrom 为 null），
    * 退回滚到这条消息本身，至少让人看到是请求还是响应。
@@ -234,8 +257,15 @@ function MessageBlock({ message, span }: { message: HttpMessage; span: AppSpan |
   useEffect(() => {
     if (!span) return;
     const target = blockRef.current?.querySelector('.http-span-highlight') ?? blockRef.current;
-    target?.scrollIntoView({ block: 'center' });
-  }, [span]);
+    if (!target) return;
+
+    if (!confineScroll) {
+      target.scrollIntoView({ block: 'center' });
+      return;
+    }
+    const pane = blockRef.current?.closest('.pane-messages');
+    if (pane) scrollIntoViewWithin(target, pane);
+  }, [span, confineScroll]);
 
   return (
     <div className={`http-message ${isRequest ? 'request' : 'response'}`} ref={blockRef}>
@@ -302,4 +332,32 @@ function renderHighlighted(text: string, span: AppSpan | null) {
       {text.slice(to)}
     </>
   );
+}
+
+/**
+ * scrollIntoView 的受限版：只滚「target 到 boundary 之间」的那几层滚动容器，
+ * 到 boundary（报文栏）为止，再往外的一概不碰。
+ *
+ * 窄屏（< 1500px）时两栏上下堆叠，.workbench-panes 是整页唯一的滚动容器，
+ * 原生 scrollIntoView 会把它一起滚到位——实测演示中落笔一个带正文的包，
+ * 左边的梯形图直接被顶出屏幕，而演示的主视图恰恰是梯形图。
+ *
+ * 每滚一层都要重新取 target 的位置：上一层滚完，它相对视口的坐标就变了。
+ */
+function scrollIntoViewWithin(target: Element, boundary: Element) {
+  let node: HTMLElement | null = target.parentElement;
+
+  while (node) {
+    const scrollable =
+      /(auto|scroll)/.test(getComputedStyle(node).overflowY) &&
+      node.scrollHeight > node.clientHeight;
+
+    if (scrollable) {
+      const box = target.getBoundingClientRect();
+      const view = node.getBoundingClientRect();
+      node.scrollTop += box.top - view.top - (node.clientHeight - box.height) / 2;
+    }
+    if (node === boundary) return;
+    node = node.parentElement;
+  }
 }

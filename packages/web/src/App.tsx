@@ -128,7 +128,14 @@ export function App() {
 
   if (activeId && active) {
     return (
+      /*
+        key 让整个工作台在换连接时重挂载，一次性复位选中包、演示进度、两栏滚动位置
+        和报文的折叠状态。少了它：滚动位置会跟着 DOM 留在原地——翻到下一条连接，
+        梯形图却停在上一条滚到的几百像素处；而用 effect 复位状态又慢一拍，
+        effect 在 paint 之后才跑，会先漏出一帧「新连接 + 旧演示进度」的错图。
+      */
       <ConnectionWorkbench
+        key={active.id}
         connection={active}
         position={{ index: activeIndex, total: connections.length }}
         loading={loadingId !== null}
